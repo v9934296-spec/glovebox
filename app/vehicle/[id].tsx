@@ -216,7 +216,14 @@ export default function VehicleDetailScreen() {
             <Card>
               <DetailRow
                 label="Decoded as"
-                value={decodedSummary ?? (vehicle.vin ? 'Not decoded yet' : 'Add a VIN to decode')}
+                value={
+                  decodedSummary ??
+                  (vehicle.vinDecodedAt != null
+                    ? 'No data returned for this VIN'
+                    : vehicle.vin
+                      ? 'Not decoded yet'
+                      : 'Add a VIN to decode')
+                }
               />
               <DetailRow
                 label="Recall status"

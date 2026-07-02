@@ -53,3 +53,20 @@ export function laterTimestamp(a: string | null, b: string): string {
   if (a === null) return b;
   return Date.parse(b) > Date.parse(a) ? b : a;
 }
+
+/**
+ * True when a sub-resource's own remote timestamp is strictly newer than its local
+ * timestamp. Used to protect independently-fetched snapshots (e.g. a VIN decode or
+ * recall check result) from being clobbered by a push of an otherwise-stale row —
+ * unlike the row's `updated_at`, these have their own timestamp precisely so a push
+ * can tell "I don't have this" apart from "I have a newer one."
+ */
+export function remoteSubResourceIsNewer(localTimestamp: string | null, remoteTimestamp: string | null): boolean {
+  if (remoteTimestamp === null) return false;
+  if (localTimestamp === null) return true;
+  const local = Date.parse(localTimestamp);
+  const remote = Date.parse(remoteTimestamp);
+  if (Number.isNaN(remote)) return false;
+  if (Number.isNaN(local)) return true;
+  return remote > local;
+}

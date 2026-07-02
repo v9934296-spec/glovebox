@@ -5,7 +5,7 @@ import { currentUserId } from '../auth/session';
 import { bumpDataVersion, getDb, nowIso } from '../db/database';
 import { isSupabaseConfigured, getSupabase } from '../supabase';
 import { ensureLocalMedia, uploadRowMedia } from './media';
-import { coalesceQueue, laterTimestamp, shouldApplyRemote } from './merge';
+import { coalesceQueue, laterTimestamp, remoteSubResourceIsNewer, shouldApplyRemote } from './merge';
 import {
   clearQueueEntries,
   enqueueChange,
@@ -28,6 +28,13 @@ type TableConfig = {
   columns: string[];
   mediaLocalColumn?: string;
   mediaCloudColumn?: string;
+  /**
+   * Timestamp/data column pairs for independently-fetched snapshots (VIN decode,
+   * recall check) that must not regress: on push, whichever side's timestamp is
+   * newer wins for that pair, instead of the whole-row upsert blindly overwriting
+   * a fresher remote snapshot with a stale local one.
+   */
+  snapshotPairs?: { timestampColumn: string; dataColumn: string }[];
 };
 
 const TABLE_CONFIG: Record<SyncTable, TableConfig> = {
@@ -39,6 +46,10 @@ const TABLE_CONFIG: Record<SyncTable, TableConfig> = {
     ],
     mediaLocalColumn: 'photo_uri',
     mediaCloudColumn: 'photo_path',
+    snapshotPairs: [
+      { timestampColumn: 'vin_decoded_at', dataColumn: 'vin_decode_json' },
+      { timestampColumn: 'recall_checked_at', dataColumn: 'recall_json' },
+    ],
   },
   service_records: {
     columns: [
@@ -97,39 +108,84 @@ function backfillIfNeeded(userId: string) {
   setSyncState(key, '1');
 }
 
+/**
+ * Fetches the current remote value of each snapshot pair for the given ids, keyed by id.
+ * A push then keeps whichever side (local vs. remote) has the newer snapshot timestamp,
+ * instead of always overwriting remote with the pushing device's possibly-stale copy.
+ */
+async function fetchRemoteSnapshots(
+  table: SyncTable,
+  config: TableConfig,
+  ids: string[],
+): Promise<Map<string, LocalRow>> {
+  const snapshots = new Map<string, LocalRow>();
+  if (!config.snapshotPairs || config.snapshotPairs.length === 0 || ids.length === 0) return snapshots;
+  const supabase = getSupabase();
+  const selectColumns = ['id', ...config.snapshotPairs.flatMap((p) => [p.timestampColumn, p.dataColumn])];
+  const { data, error } = await supabase.from(table).select(selectColumns.join(',')).in('id', ids);
+  if (error) throw new Error(`push ${table} snapshot fetch failed: ${error.message}`);
+  for (const row of (data ?? []) as unknown as LocalRow[]) {
+    snapshots.set(row.id as string, row);
+  }
+  return snapshots;
+}
+
 async function pushQueue(userId: string) {
   const changes = coalesceQueue(readQueue());
   if (changes.length === 0) return;
   const supabase = getSupabase();
+  let firstError: Error | null = null;
 
-  // Table order keeps vehicles ahead of their children.
+  // Table order keeps vehicles ahead of their children. A failure on one table
+  // (e.g. a not-yet-applied migration) shouldn't stop the others from pushing,
+  // or the caller from still pulling — so failures are collected, not thrown,
+  // until every table has been attempted.
   for (const table of SYNC_TABLES) {
     const tableChanges = changes.filter((c) => c.table === table);
     if (tableChanges.length === 0) continue;
     const config = TABLE_CONFIG[table];
-    const payloads: Record<string, unknown>[] = [];
 
-    for (const change of tableChanges) {
-      const row = getLocalRow(table, change.rowId);
-      if (!row) continue; // row hard-deleted locally (data reset); nothing to push
-      const payload: Record<string, unknown> = { user_id: userId };
-      for (const col of config.columns) payload[col] = row[col] ?? null;
-      if (config.mediaLocalColumn && config.mediaCloudColumn) {
-        const localUri = (row[config.mediaLocalColumn] as string | null) ?? null;
-        payload[config.mediaCloudColumn] =
-          row.deleted_at === null ? await uploadRowMedia(userId, table, change.rowId, localUri) : null;
+    try {
+      const remoteSnapshots = await fetchRemoteSnapshots(table, config, tableChanges.map((c) => c.rowId));
+      const payloads: Record<string, unknown>[] = [];
+
+      for (const change of tableChanges) {
+        const row = getLocalRow(table, change.rowId);
+        if (!row) continue; // row hard-deleted locally (data reset); nothing to push
+        const payload: Record<string, unknown> = { user_id: userId };
+        for (const col of config.columns) payload[col] = row[col] ?? null;
+        if (config.mediaLocalColumn && config.mediaCloudColumn) {
+          const localUri = (row[config.mediaLocalColumn] as string | null) ?? null;
+          payload[config.mediaCloudColumn] =
+            row.deleted_at === null ? await uploadRowMedia(userId, table, change.rowId, localUri) : null;
+        }
+        const remote = remoteSnapshots.get(change.rowId);
+        if (remote) {
+          for (const pair of config.snapshotPairs ?? []) {
+            const localTs = (row[pair.timestampColumn] as string | null) ?? null;
+            const remoteTs = (remote[pair.timestampColumn] as string | null) ?? null;
+            if (remoteSubResourceIsNewer(localTs, remoteTs)) {
+              payload[pair.timestampColumn] = remoteTs;
+              payload[pair.dataColumn] = remote[pair.dataColumn] ?? null;
+            }
+          }
+        }
+        payloads.push(payload);
       }
-      payloads.push(payload);
-    }
 
-    if (payloads.length > 0) {
-      const { error } = await supabase.from(table).upsert(payloads);
-      if (error) throw new Error(`push ${table} failed: ${error.message}`);
-    }
-    for (const change of tableChanges) {
-      clearQueueEntries(change.maxQueueId, table, change.rowId);
+      if (payloads.length > 0) {
+        const { error } = await supabase.from(table).upsert(payloads);
+        if (error) throw new Error(`push ${table} failed: ${error.message}`);
+      }
+      for (const change of tableChanges) {
+        clearQueueEntries(change.maxQueueId, table, change.rowId);
+      }
+    } catch (e) {
+      firstError ??= e instanceof Error ? e : new Error(`push ${table} failed`);
     }
   }
+
+  if (firstError) throw firstError;
 }
 
 async function pullChanges(userId: string) {
@@ -215,8 +271,17 @@ export async function syncNow(): Promise<void> {
     const network = await Network.getNetworkStateAsync();
     if (network.isConnected === false) return;
     backfillIfNeeded(userId);
-    await pushQueue(userId);
+    // A push failure (e.g. a cloud migration that hasn't been applied yet) is kept
+    // aside rather than thrown immediately, so pulling other devices' changes still
+    // runs instead of stalling entirely on one table's error.
+    let pushError: Error | null = null;
+    try {
+      await pushQueue(userId);
+    } catch (e) {
+      pushError = e instanceof Error ? e : new Error('Push failed');
+    }
     await pullChanges(userId);
+    if (pushError) throw pushError;
     setSyncState('lastSyncedAt', nowIso());
   } catch (e) {
     useSyncStatus.setState({ error: e instanceof Error ? e.message : 'Sync failed' });

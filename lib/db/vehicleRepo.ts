@@ -32,7 +32,13 @@ function parseJson<T>(raw: string | null, fallback: T): T {
   }
 }
 
-function fromRow(r: VehicleRow): Vehicle {
+/**
+ * `parseSnapshots` skips JSON.parse of vin_decode_json/recall_json — only the single-vehicle
+ * detail screen reads those fields, but listVehicles() re-runs (and would re-parse every
+ * vehicle's blobs) on every write to any table, since data-version invalidation is global.
+ */
+function fromRow(r: VehicleRow, opts: { parseSnapshots?: boolean } = {}): Vehicle {
+  const parseSnapshots = opts.parseSnapshots ?? true;
   return {
     id: r.id,
     nickname: r.nickname,
@@ -47,9 +53,9 @@ function fromRow(r: VehicleRow): Vehicle {
     purchasePrice: r.purchase_price,
     photoUri: r.photo_uri,
     vinDecodedAt: r.vin_decoded_at,
-    vinDecoded: parseJson<DecodedVin | null>(r.vin_decode_json, null),
+    vinDecoded: parseSnapshots ? parseJson<DecodedVin | null>(r.vin_decode_json, null) : null,
     recallCheckedAt: r.recall_checked_at,
-    recalls: parseJson<Recall[]>(r.recall_json, []),
+    recalls: parseSnapshots ? parseJson<Recall[]>(r.recall_json, []) : [],
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -59,7 +65,7 @@ export function listVehicles(): Vehicle[] {
   const rows = getDb().getAllSync<VehicleRow>(
     'SELECT * FROM vehicles WHERE deleted_at IS NULL ORDER BY created_at ASC',
   );
-  return rows.map(fromRow);
+  return rows.map((r) => fromRow(r, { parseSnapshots: false }));
 }
 
 export function getVehicle(id: string): Vehicle | null {

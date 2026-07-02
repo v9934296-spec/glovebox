@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button, EmptyState, Field, Screen, SectionHeader } from '@/components/ui';
 import { useVehicles } from '@/lib/db/hooks';
@@ -10,7 +10,7 @@ import { createVehicle } from '@/lib/db/vehicleRepo';
 import { canAddVehicle } from '@/lib/monetization/entitlements';
 import { useIsPro } from '@/lib/monetization/purchases';
 import { palette, radius, spacing, typography } from '@/lib/theme';
-import { validateVin } from '@/lib/domain/vin';
+import { normalizeVin, validateVin } from '@/lib/domain/vin';
 
 type FormValues = {
   nickname: string;
@@ -48,6 +48,16 @@ export default function AddVehicleScreen() {
     },
   });
 
+  // Format is enforced (blocking) by the vin field's own `rules.validate`; the check
+  // digit is a softer signal — a mismatch usually means a typo, but some legitimate
+  // (non-North-American) VINs don't follow it — so it's shown as a warning, not a block.
+  const vinValue = useWatch({ control, name: 'vin' });
+  const vinCheck = vinValue?.trim() ? validateVin(vinValue) : null;
+  const vinCheckDigitWarning =
+    vinCheck?.valid && !vinCheck.checkDigitOk
+      ? "This VIN's check digit doesn't match — double-check for typos."
+      : null;
+
   async function pickPhoto() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
@@ -60,11 +70,10 @@ export default function AddVehicleScreen() {
   }
 
   const onSubmit = handleSubmit((values) => {
+    // The vin field's rules.validate already blocks submission on a malformed VIN,
+    // so by this point a non-empty value is guaranteed well-formed — just normalize it.
     const vinInput = values.vin.trim();
-    const vinCheck = vinInput ? validateVin(vinInput) : null;
-    // Normalize a well-formed VIN; otherwise keep the raw entry (rare — react-hook-form
-    // already blocks submit on a validation error) rather than silently dropping it.
-    const vin = vinCheck?.valid ? vinCheck.vin : vinInput || null;
+    const vin = vinInput ? normalizeVin(vinInput) : null;
     createVehicle({
       nickname: values.nickname.trim(),
       make: values.make.trim(),
@@ -238,14 +247,19 @@ export default function AddVehicleScreen() {
             },
           }}
           render={({ field, fieldState }) => (
-            <Field
-              label="VIN"
-              placeholder="17 characters"
-              autoCapitalize="characters"
-              value={field.value}
-              onChangeText={field.onChange}
-              error={fieldState.error?.message}
-            />
+            <View>
+              <Field
+                label="VIN"
+                placeholder="17 characters"
+                autoCapitalize="characters"
+                value={field.value}
+                onChangeText={field.onChange}
+                error={fieldState.error?.message}
+              />
+              {fieldState.error == null && vinCheckDigitWarning != null && (
+                <Text style={styles.vinWarning}>{vinCheckDigitWarning}</Text>
+              )}
+            </View>
           )}
         />
 
@@ -309,4 +323,10 @@ const styles = StyleSheet.create({
   },
   photoHint: { color: palette.text.tertiary, fontSize: typography.caption.size },
   twoCol: { flexDirection: 'row', gap: spacing.md },
+  vinWarning: {
+    color: palette.status.dueSoon,
+    fontSize: typography.caption.size,
+    marginTop: -spacing.md,
+    marginBottom: spacing.lg,
+  },
 });

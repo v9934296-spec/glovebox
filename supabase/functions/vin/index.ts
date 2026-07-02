@@ -88,6 +88,8 @@ Deno.serve(async (req) => {
   try {
     if (task === 'decode') {
       const vin = typeof body.vin === 'string' ? body.vin.trim().toUpperCase() : '';
+      // Mirrors lib/domain/vin.ts's VIN_FORMAT — Deno can't import from lib/, so this
+      // format check is duplicated; keep the two in sync if the charset rule changes.
       if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)) {
         return json({ error: 'A valid 17-character VIN is required' }, 400);
       }

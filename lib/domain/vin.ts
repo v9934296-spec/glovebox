@@ -4,6 +4,7 @@
  * untrusted like lib/ai/parse.ts: values are coerced/dropped rather than
  * trusted, so a sloppy response degrades to fewer fields, never a crash.
  */
+import { asString } from './coerce';
 import type { DecodedVin, Recall } from './types';
 
 export function normalizeVin(raw: string): string {
@@ -62,10 +63,6 @@ export function validateVin(raw: string): VinValidation {
 function asRecord(raw: unknown): Record<string, unknown> {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {};
   return raw as Record<string, unknown>;
-}
-
-function asString(v: unknown): string | null {
-  return typeof v === 'string' && v.trim() !== '' ? v.trim() : null;
 }
 
 function asYear(v: unknown): number | null {

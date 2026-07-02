@@ -1,4 +1,4 @@
-import { coalesceQueue, laterTimestamp, shouldApplyRemote } from '../merge';
+import { coalesceQueue, laterTimestamp, remoteSubResourceIsNewer, shouldApplyRemote } from '../merge';
 import type { QueueEntry } from '../queue';
 
 describe('coalesceQueue', () => {
@@ -87,5 +87,25 @@ describe('laterTimestamp', () => {
       '2026-07-01T14:00:00.000Z',
     );
     expect(laterTimestamp(null, '2026-07-01T13:00:00+00:00')).toBe('2026-07-01T13:00:00+00:00');
+  });
+});
+
+describe('remoteSubResourceIsNewer', () => {
+  const OLDER = '2026-07-01T11:00:00.000Z';
+  const NEWER = '2026-07-01T13:00:00.000Z';
+
+  it('is false when remote has no snapshot', () => {
+    expect(remoteSubResourceIsNewer(OLDER, null)).toBe(false);
+    expect(remoteSubResourceIsNewer(null, null)).toBe(false);
+  });
+
+  it('is true when local has no snapshot but remote does', () => {
+    expect(remoteSubResourceIsNewer(null, NEWER)).toBe(true);
+  });
+
+  it('is true only when remote is strictly newer than local', () => {
+    expect(remoteSubResourceIsNewer(OLDER, NEWER)).toBe(true);
+    expect(remoteSubResourceIsNewer(NEWER, OLDER)).toBe(false);
+    expect(remoteSubResourceIsNewer(OLDER, OLDER)).toBe(false);
   });
 });

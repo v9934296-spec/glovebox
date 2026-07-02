@@ -4,6 +4,7 @@
  * values are coerced where reasonable and dropped (null) where not, so a
  * sloppy model answer degrades to fewer prefilled fields, never a crash.
  */
+import { asString } from '../domain/coerce';
 import { SERVICE_TYPES } from '../domain/serviceTypes';
 
 export class AiParseError extends Error {
@@ -16,10 +17,6 @@ export class AiParseError extends Error {
 function asRecord(raw: unknown): Record<string, unknown> {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) throw new AiParseError();
   return raw as Record<string, unknown>;
-}
-
-function asString(v: unknown): string | null {
-  return typeof v === 'string' && v.trim() !== '' ? v.trim() : null;
 }
 
 /** Accepts numbers or numeric strings like "82.50" / "$1,234.56". */
