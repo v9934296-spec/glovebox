@@ -1,0 +1,186 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useMemo } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Button, Card, DueBadge, EmptyState, Screen, SectionHeader, StatTile } from '@/components/ui';
+import { useAllServiceRecords, useReminders, useVehicles } from '@/lib/db/hooks';
+import { dueSummary, reminderDueState, todayIso, type DueState } from '@/lib/domain/due';
+import { formatMoney, summarizeExpenses } from '@/lib/domain/expenses';
+import { healthScore } from '@/lib/domain/healthScore';
+import { serviceTypeLabel } from '@/lib/domain/serviceTypes';
+import { palette, spacing, typography } from '@/lib/theme';
+
+export default function DashboardScreen() {
+  const router = useRouter();
+  const vehicles = useVehicles();
+  const allRecords = useAllServiceRecords();
+  const activeReminders = useReminders({ status: 'active' });
+  const today = todayIso();
+
+  const attention = useMemo(() => {
+    const vehicleById = new Map(vehicles.map((v) => [v.id, v]));
+    const rank: Record<DueState, number> = { overdue: 0, due_soon: 1, upcoming: 2, no_due: 3 };
+    return activeReminders
+      .map((reminder) => {
+        const vehicle = vehicleById.get(reminder.vehicleId);
+        if (!vehicle) return null;
+        const state = reminderDueState(reminder, vehicle.mileage, today);
+        return { reminder, vehicle, state };
+      })
+      .filter((e): e is NonNullable<typeof e> => e !== null && e.state !== 'no_due' && e.state !== 'upcoming')
+      .sort((a, b) => rank[a.state] - rank[b.state])
+      .slice(0, 5);
+  }, [activeReminders, vehicles, today]);
+
+  const expenses = useMemo(() => summarizeExpenses(allRecords, today), [allRecords, today]);
+  const recentRecords = allRecords.slice(0, 3);
+
+  if (vehicles.length === 0) {
+    return (
+      <Screen>
+        <EmptyState
+          title="Welcome to Glovebox"
+          message="Your car's memory, maintenance plan, and repair history in one app. Add your first vehicle to get started."
+          action={<Button title="Add your vehicle" onPress={() => router.push('/vehicle/add')} />}
+        />
+      </Screen>
+    );
+  }
+
+  return (
+    <Screen style={{ padding: 0 }}>
+      <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'] }}>
+        <View style={styles.statRow}>
+          <StatTile label="This month" value={formatMoney(expenses.monthTotal)} />
+          <StatTile label="This year" value={formatMoney(expenses.yearTotal)} />
+        </View>
+
+        <SectionHeader
+          title="Needs attention"
+          right={
+            <Pressable onPress={() => router.push('/reminders')}>
+              <Text style={styles.link}>All reminders</Text>
+            </Pressable>
+          }
+        />
+        {attention.length === 0 ? (
+          <Card>
+            <View style={styles.allGood}>
+              <Ionicons name="checkmark-circle-outline" size={20} color={palette.status.ok} />
+              <Text style={styles.allGoodText}>Nothing overdue. You're on top of it.</Text>
+            </View>
+          </Card>
+        ) : (
+          <View style={{ gap: spacing.sm }}>
+            {attention.map(({ reminder, vehicle, state }) => (
+              <Pressable
+                key={reminder.id}
+                onPress={() => router.push({ pathname: '/vehicle/[id]', params: { id: vehicle.id } })}
+              >
+                <Card style={styles.attentionCard}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.attentionTitle}>{reminder.title}</Text>
+                    <Text style={styles.attentionMeta}>
+                      {vehicle.nickname} ·{' '}
+                      {dueSummary({
+                        dueDate: reminder.dueDate,
+                        dueMileage: reminder.dueMileage,
+                        currentMileage: vehicle.mileage,
+                        today,
+                      })}
+                    </Text>
+                  </View>
+                  <DueBadge state={state} />
+                </Card>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
+        <SectionHeader title="Your garage" />
+        <View style={{ gap: spacing.sm }}>
+          {vehicles.map((vehicle) => {
+            const records = allRecords.filter((r) => r.vehicleId === vehicle.id);
+            const reminders = activeReminders.filter((r) => r.vehicleId === vehicle.id);
+            const health = healthScore({ vehicle, records, reminders, today });
+            return (
+              <Pressable
+                key={vehicle.id}
+                onPress={() => router.push({ pathname: '/vehicle/[id]', params: { id: vehicle.id } })}
+              >
+                <Card style={styles.vehicleRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.vehicleName}>{vehicle.nickname}</Text>
+                    <Text style={styles.vehicleMeta}>
+                      {vehicle.year} {vehicle.make} {vehicle.model} · {vehicle.mileage.toLocaleString()} mi
+                    </Text>
+                  </View>
+                  <View style={styles.healthPill}>
+                    <Text style={styles.healthValue}>{health.score}</Text>
+                    <Text style={styles.healthLabel}>{health.label}</Text>
+                  </View>
+                </Card>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {recentRecords.length > 0 && (
+          <>
+            <SectionHeader title="Recent activity" />
+            <Card>
+              {recentRecords.map((r, i) => (
+                <View key={r.id} style={[styles.activityRow, i < recentRecords.length - 1 && styles.activityBorder]}>
+                  <Text style={styles.activityType}>{serviceTypeLabel(r.serviceType)}</Text>
+                  <Text style={styles.activityMeta}>
+                    {r.date}
+                    {r.cost != null ? ` · ${formatMoney(r.cost)}` : ''}
+                  </Text>
+                </View>
+              ))}
+            </Card>
+          </>
+        )}
+
+        <View style={styles.quickActions}>
+          <Button title="Log service" onPress={() => router.push('/service/add')} style={{ flex: 1 }} />
+          <Button
+            title="New reminder"
+            variant="secondary"
+            onPress={() => router.push('/reminder/add')}
+            style={{ flex: 1 }}
+          />
+        </View>
+      </ScrollView>
+    </Screen>
+  );
+}
+
+const styles = StyleSheet.create({
+  statRow: { flexDirection: 'row', gap: spacing.md },
+  link: { color: palette.accent.primary, fontSize: typography.caption.size, fontWeight: '600' },
+  allGood: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  allGoodText: { color: palette.text.secondary, fontSize: typography.body.size },
+  attentionCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  attentionTitle: {
+    color: palette.text.primary,
+    fontSize: typography.bodyEmphasis.size,
+    fontWeight: typography.bodyEmphasis.weight,
+  },
+  attentionMeta: { color: palette.text.tertiary, fontSize: typography.caption.size, marginTop: 2 },
+  vehicleRow: { flexDirection: 'row', alignItems: 'center' },
+  vehicleName: {
+    color: palette.text.primary,
+    fontSize: typography.bodyEmphasis.size,
+    fontWeight: typography.bodyEmphasis.weight,
+  },
+  vehicleMeta: { color: palette.text.tertiary, fontSize: typography.caption.size, marginTop: 2 },
+  healthPill: { alignItems: 'center' },
+  healthValue: { color: palette.accent.primary, fontSize: typography.h3.size, fontWeight: typography.h3.weight },
+  healthLabel: { color: palette.text.tertiary, fontSize: 10 },
+  activityRow: { paddingVertical: spacing.sm },
+  activityBorder: { borderBottomWidth: 1, borderBottomColor: palette.border.subtle },
+  activityType: { color: palette.text.primary, fontSize: typography.body.size, fontWeight: '500' },
+  activityMeta: { color: palette.text.tertiary, fontSize: typography.caption.size, marginTop: 2 },
+  quickActions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xl },
+});
