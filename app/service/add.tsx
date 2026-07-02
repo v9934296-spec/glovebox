@@ -2,13 +2,17 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button, Chip, EmptyState, Field, SectionHeader } from '@/components/ui';
+import { aiAvailability, scanReceipt } from '@/lib/ai/client';
+import { isEmptyScan } from '@/lib/ai/parse';
 import { useVehicles } from '@/lib/db/hooks';
 import { createServiceRecord } from '@/lib/db/serviceRepo';
 import { updateVehicleMileage } from '@/lib/db/vehicleRepo';
 import { addMonthsIso, todayIso } from '@/lib/domain/due';
 import { SERVICE_TYPES, serviceTypeDef } from '@/lib/domain/serviceTypes';
+import { canAttachReceipt, canUseAi } from '@/lib/monetization/entitlements';
+import { useIsPro } from '@/lib/monetization/purchases';
 import { palette, radius, spacing, typography } from '@/lib/theme';
 
 export default function AddServiceScreen() {
@@ -43,10 +47,57 @@ export default function AddServiceScreen() {
   const effectiveNextDueDate = nextDueTouched ? nextDueDate : (suggestedNextDue.date ?? '');
   const effectiveNextDueMileage = nextDueTouched ? nextDueMileage : (suggestedNextDue.mileage != null ? String(suggestedNextDue.mileage) : '');
 
+  const isPro = useIsPro();
+
   async function pickReceipt() {
+    const gate = canAttachReceipt(isPro);
+    if (!gate.allowed) {
+      Alert.alert('Glovebox Pro', gate.reason, [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'See Pro', onPress: () => router.push('/paywall') },
+      ]);
+      return;
+    }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
     const uri = result.assets?.[0]?.uri;
     if (!result.canceled && uri) setReceiptUri(uri);
+  }
+
+  const [scanning, setScanning] = useState(false);
+
+  async function scanAttachedReceipt() {
+    if (!receiptUri || scanning) return;
+    const gate = canUseAi(isPro);
+    if (!gate.allowed) {
+      Alert.alert('Glovebox Pro', gate.reason, [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'See Pro', onPress: () => router.push('/paywall') },
+      ]);
+      return;
+    }
+    const availability = aiAvailability();
+    if (!availability.available) {
+      Alert.alert('AI unavailable', availability.reason);
+      return;
+    }
+    setScanning(true);
+    try {
+      const scan = await scanReceipt(receiptUri);
+      if (isEmptyScan(scan)) {
+        Alert.alert('Nothing found', "Couldn't read any details from that photo. Enter the record manually.");
+        return;
+      }
+      if (scan.serviceType != null) setServiceType(scan.serviceType);
+      if (scan.date != null) setDate(scan.date);
+      if (scan.cost != null) setCost(String(scan.cost));
+      if (scan.shopName != null) setShopName(scan.shopName);
+      if (scan.mileage != null) setMileage(String(scan.mileage));
+      if (scan.summary != null && notes.trim() === '') setNotes(scan.summary);
+    } catch (e: unknown) {
+      Alert.alert('Scan failed', e instanceof Error ? e.message : 'Try again later.');
+    } finally {
+      setScanning(false);
+    }
   }
 
   function save() {
@@ -137,7 +188,23 @@ export default function AddServiceScreen() {
             <Ionicons name="receipt-outline" size={20} color={palette.accent.primary} />
           )}
           <Text style={styles.receiptText}>{receiptUri ? 'Change receipt photo' : 'Attach receipt photo'}</Text>
+          {!isPro && (
+            <View style={styles.proBadge}>
+              <Text style={styles.proBadgeText}>PRO</Text>
+            </View>
+          )}
         </Pressable>
+
+        {receiptUri != null && (
+          <Pressable onPress={() => void scanAttachedReceipt()} disabled={scanning} style={styles.receiptRow}>
+            {scanning ? (
+              <ActivityIndicator size="small" color={palette.accent.primary} />
+            ) : (
+              <Ionicons name="sparkles-outline" size={20} color={palette.accent.primary} />
+            )}
+            <Text style={styles.receiptText}>{scanning ? 'Reading receipt…' : 'Scan receipt to fill this form'}</Text>
+          </Pressable>
+        )}
 
         <SectionHeader title="Next due (prefilled from service type)" />
         <View style={styles.twoCol}>
@@ -187,5 +254,18 @@ const styles = StyleSheet.create({
   },
   receiptThumb: { width: 40, height: 40, borderRadius: radius.sm },
   receiptText: { color: palette.accent.primary, fontSize: typography.body.size, fontWeight: '500' },
+  proBadge: {
+    borderWidth: 1,
+    borderColor: palette.accent.primary,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 1,
+  },
+  proBadgeText: {
+    color: palette.accent.primary,
+    fontSize: typography.overline.size,
+    fontWeight: typography.overline.weight,
+    letterSpacing: typography.overline.letterSpacing,
+  },
   error: { color: palette.status.overdue, fontSize: typography.caption.size, marginBottom: spacing.sm },
 });

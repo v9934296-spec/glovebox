@@ -13,8 +13,9 @@ account" keeps everything local.
 - Expo (SDK 55) + React Native + TypeScript (strict)
 - Expo Router (file-based navigation, typed routes, `Stack.Protected` auth gating)
 - expo-sqlite for local persistence (schema versioned via `PRAGMA user_version`)
-- Supabase (auth, Postgres with RLS, Storage) for accounts and cloud sync — optional
-- Zustand for cross-screen data invalidation and auth/sync state
+- Supabase (auth, Postgres with RLS, Storage, Edge Functions) for accounts, cloud sync, and AI — optional
+- RevenueCat (react-native-purchases) for Glovebox Pro subscriptions — optional
+- Zustand for cross-screen data invalidation and auth/sync/entitlement state
 - React Hook Form + Zod for forms/validation
 - Jest (jest-expo) for unit tests
 
@@ -27,6 +28,8 @@ app/                    # Expo Router routes
   vehicle/              #   add (modal), [id] detail
   service/add.tsx       #   log-service modal
   reminder/add.tsx      #   new-reminder modal
+  ai/assistant.tsx      #   AI repair explainer + price check modal
+  paywall.tsx           #   Glovebox Pro paywall modal
 components/ui.tsx       # design-system primitives (Button, Card, Field, badges…)
 lib/theme.ts            # design tokens — all colors/spacing/type come from here
 lib/domain/             # pure business logic (unit tested, no RN imports)
@@ -34,8 +37,14 @@ lib/domain/             # pure business logic (unit tested, no RN imports)
   healthScore.ts        #   0–100 health heuristic
   expenses.ts           #   month/year/lifetime/cost-per-mile aggregation
   serviceTypes.ts       #   service catalog + default intervals
+lib/ai/                 # Phase 4 AI features
+  client.ts             #   calls the `ai` Edge Function; availability gating
+  parse.ts              #   pure validation of AI responses (unit tested)
 lib/db/                 # SQLite: migrations, repos, React hooks
 lib/auth/session.ts     # Supabase auth store (sign in/up/out, local-only mode)
+lib/monetization/       # Glovebox Pro
+  entitlements.ts       #   pure gating rules: free limits, Pro features (unit tested)
+  purchases.ts          #   RevenueCat wrapper: entitlement store, purchase/restore
 lib/sync/               # offline-first sync
   queue.ts              #   sync_queue writes + sync_state cursors
   merge.ts              #   pure LWW conflict logic (unit tested)
@@ -43,6 +52,7 @@ lib/sync/               # offline-first sync
   media.ts              #   photo/receipt upload & download (Supabase Storage)
 lib/supabase.ts         # client init; app runs local-only without env config
 supabase/migrations/    # cloud schema SQL (run in the Supabase dashboard)
+supabase/functions/ai/  # Edge Function proxying OpenAI (holds the API key)
 ```
 
 ## Development
@@ -88,7 +98,73 @@ Without a `.env` the app boots straight into local-only mode (no auth screens).
 - Sync runs on sign-in, on app foreground, after writes, and via
   Settings → Sync now. Offline? Changes wait in the queue.
 
-## Current scope (Phases 1–2)
+## Glovebox Pro (monetization)
+
+The free plan covers the core tracker; Pro removes limits:
+
+| | Free | Pro |
+|---|---|---|
+| Vehicles | 2 | Unlimited |
+| Maintenance log & reminders | Full | Full |
+| Receipt photos | — | Included |
+| AI receipt scanner & repair assistant | — | Included |
+| PDF report (Phase 5) | — | Included when it ships |
+
+All gating rules live in `lib/monetization/entitlements.ts`; screens call
+`canAddVehicle` / `canAttachReceipt` and send blocked users to the paywall.
+
+### RevenueCat setup
+
+1. Create a project at [revenuecat.com](https://www.revenuecat.com) and add your
+   iOS/Android apps (bundle id `app.glovebox.mobile`).
+2. Create an entitlement with identifier **`pro`**, attach your subscription
+   products to it, and add them to the **current offering** (the paywall lists
+   whatever packages the current offering contains).
+3. Add the public SDK keys to `.env`:
+
+   ```bash
+   EXPO_PUBLIC_REVENUECAT_IOS_KEY=appl_...
+   EXPO_PUBLIC_REVENUECAT_ANDROID_KEY=goog_...
+   ```
+
+Without keys (or in Expo Go/web, where the native module is unavailable) the
+app stays on the free tier and the paywall explains that purchases aren't
+available in that build. When a user signs in, the RevenueCat identity is
+linked to the Supabase user id so Pro follows the account across devices.
+Note that `react-native-purchases` is a native module: use a development build
+(`pnpm ios` / `pnpm android`), not Expo Go, to test purchases.
+
+## AI features (Phase 4)
+
+Three AI tools ship in Phase 4, all Pro-gated and all optional:
+
+- **Receipt scanner** — attach a receipt photo when logging service and tap
+  "Scan receipt": the service type, date, cost, shop, and mileage prefill from
+  the photo.
+- **Repair explainer** — from a vehicle's Overview tab (or the sparkles icon on
+  any service record), ask what a repair actually is: plain-language
+  explanation, urgency, DIY difficulty, and questions to ask the shop.
+- **Price check** — enter a quote and get a typical price range for that work
+  on that specific vehicle, plus a low/fair/high verdict.
+
+### AI setup
+
+The app never calls the model provider directly. A Supabase Edge Function
+([supabase/functions/ai](supabase/functions/ai/index.ts)) holds the OpenAI key
+and verifies the caller's Supabase JWT, so AI requires a signed-in account:
+
+```bash
+supabase functions deploy ai            # from the repo root, after `supabase link`
+supabase secrets set OPENAI_API_KEY=sk-...
+supabase secrets set OPENAI_MODEL=gpt-4o-mini   # optional, this is the default
+```
+
+Without the deployed function the AI buttons still render, but explain that AI
+isn't available in this build. Responses are validated in
+`lib/ai/parse.ts` — malformed model output degrades to fewer prefilled
+fields rather than crashes.
+
+## Current scope (Phases 1–4)
 
 - Garage: multiple vehicles with photo, mileage, health score
 - Maintenance log: typed service records with cost, shop, receipt photo, next-due prefill
@@ -97,11 +173,11 @@ Without a `.env` the app boots straight into local-only mode (no auth screens).
 - Expenses: month/year/lifetime totals, cost per mile, repair-vs-maintenance split
 - Accounts: email/password auth (Supabase), optional — local-only mode always works
 - Cloud sync: offline-first queue, LWW merge, soft deletes, photo/receipt storage
-- Settings: account & sync status, data reset
+- Monetization: free limits (2 vehicles, no receipts), Pro subscription via RevenueCat, paywall, restore
+- AI: receipt scanner, repair explainer, price checker (Pro, via Supabase Edge Function)
+- Settings: account & sync status, plan & upgrade, data reset
 
 ## Roadmap
 
-- Phase 3 — RevenueCat monetization (free limits, Pro unlocks)
-- Phase 4 — AI: receipt scanner, repair explainer, cost-reasonableness helper
 - Phase 5 — PDF vehicle history / sale report
 - Phase 6 — family sharing, fleet mode, recalls, VIN decode

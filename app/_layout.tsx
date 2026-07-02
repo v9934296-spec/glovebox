@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useAuth } from '@/lib/auth/session';
 import { getDb } from '@/lib/db/database';
+import { identifyPurchasesUser, useEntitlements } from '@/lib/monetization/purchases';
 import { startSyncLifecycle } from '@/lib/sync/engine';
 import { palette } from '@/lib/theme';
 
@@ -12,17 +13,28 @@ getDb();
 
 export default function RootLayout() {
   const status = useAuth((s) => s.status);
+  const session = useAuth((s) => s.session);
   const initialize = useAuth((s) => s.initialize);
+  const initializePurchases = useEntitlements((s) => s.initialize);
+  const purchasesStatus = useEntitlements((s) => s.status);
 
   useEffect(() => {
     void initialize();
-  }, [initialize]);
+    void initializePurchases();
+  }, [initialize, initializePurchases]);
 
   useEffect(() => {
     if (status === 'signedIn') {
       return startSyncLifecycle();
     }
   }, [status]);
+
+  // Keep the RevenueCat identity in step with the Supabase account so Pro
+  // follows the user across devices.
+  useEffect(() => {
+    if (purchasesStatus !== 'ready' || status === 'loading') return;
+    void identifyPurchasesUser(session?.user.id ?? null);
+  }, [purchasesStatus, status, session?.user.id]);
 
   if (status === 'loading') {
     return (
@@ -51,6 +63,8 @@ export default function RootLayout() {
           <Stack.Screen name="vehicle/[id]" options={{ title: 'Vehicle' }} />
           <Stack.Screen name="service/add" options={{ presentation: 'modal', title: 'Log service' }} />
           <Stack.Screen name="reminder/add" options={{ presentation: 'modal', title: 'New reminder' }} />
+          <Stack.Screen name="ai/assistant" options={{ presentation: 'modal', title: 'AI assistant' }} />
+          <Stack.Screen name="paywall" options={{ presentation: 'modal', title: 'Glovebox Pro' }} />
         </Stack.Protected>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       </Stack>

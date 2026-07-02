@@ -142,10 +142,16 @@ export default function VehicleDetailScreen() {
               />
             </Card>
             <Button
+              title="Ask AI about a repair"
+              variant="secondary"
+              onPress={() => router.push({ pathname: '/ai/assistant', params: { vehicleId: vehicle.id } })}
+              style={{ marginTop: spacing.xl }}
+            />
+            <Button
               title="Delete vehicle"
               variant="danger"
               onPress={confirmDeleteVehicle}
-              style={{ marginTop: spacing.xl }}
+              style={{ marginTop: spacing.md }}
             />
           </View>
         )}
@@ -186,6 +192,21 @@ export default function VehicleDetailScreen() {
                         })}
                       </Text>
                     )}
+                    <Pressable
+                      onPress={() =>
+                        router.push({
+                          pathname: '/ai/assistant',
+                          params: {
+                            vehicleId: vehicle.id,
+                            serviceLabel: serviceTypeLabel(r.serviceType),
+                            ...(r.cost != null ? { cost: String(r.cost) } : {}),
+                          },
+                        })
+                      }
+                      style={styles.recordAi}
+                    >
+                      <Ionicons name="sparkles-outline" size={16} color={palette.text.tertiary} />
+                    </Pressable>
                     <Pressable
                       onPress={() =>
                         Alert.alert('Delete record', 'Remove this service record?', [
@@ -366,6 +387,7 @@ const styles = StyleSheet.create({
   recordNotes: { color: palette.text.secondary, fontSize: typography.caption.size, marginTop: spacing.sm },
   recordNext: { color: palette.status.dueSoon, fontSize: typography.caption.size, marginTop: spacing.sm },
   recordDelete: { position: 'absolute', right: spacing.md, bottom: spacing.md, padding: spacing.xs },
+  recordAi: { position: 'absolute', right: spacing.md + 32, bottom: spacing.md, padding: spacing.xs },
   reminderActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.md },
   reminderDelete: { padding: spacing.sm },
 });
