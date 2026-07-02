@@ -3,7 +3,7 @@ import { create } from 'zustand';
 
 let db: SQLiteDatabase | null = null;
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 const MIGRATIONS: Record<number, string> = {
   1: `
@@ -77,6 +77,15 @@ const MIGRATIONS: Record<number, string> = {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+  `,
+  // Phase 6: VIN decode + recall check metadata, stored as JSON blobs since
+  // shape/size vary by provider response. checked/decoded timestamps stay
+  // null ("unknown") until a lookup has actually run.
+  3: `
+    ALTER TABLE vehicles ADD COLUMN vin_decoded_at TEXT;
+    ALTER TABLE vehicles ADD COLUMN vin_decode_json TEXT;
+    ALTER TABLE vehicles ADD COLUMN recall_checked_at TEXT;
+    ALTER TABLE vehicles ADD COLUMN recall_json TEXT;
   `,
 };
 

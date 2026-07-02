@@ -37,9 +37,12 @@ lib/domain/             # pure business logic (unit tested, no RN imports)
   healthScore.ts        #   0–100 health heuristic
   expenses.ts           #   month/year/lifetime/cost-per-mile aggregation
   serviceTypes.ts       #   service catalog + default intervals
+  vin.ts                #   VIN normalize/validate + decode/recall parsing (unit tested)
 lib/ai/                 # Phase 4 AI features
   client.ts             #   calls the `ai` Edge Function; availability gating
   parse.ts              #   pure validation of AI responses (unit tested)
+lib/vin/                # Phase 6 VIN decode + recall checks
+  client.ts             #   calls the `vin` Edge Function; availability gating
 lib/db/                 # SQLite: migrations, repos, React hooks
 lib/auth/session.ts     # Supabase auth store (sign in/up/out, local-only mode)
 lib/monetization/       # Glovebox Pro
@@ -56,6 +59,7 @@ lib/sync/               # offline-first sync
 lib/supabase.ts         # client init; app runs local-only without env config
 supabase/migrations/    # cloud schema SQL (run in the Supabase dashboard)
 supabase/functions/ai/  # Edge Function proxying OpenAI (holds the API key)
+supabase/functions/vin/ # Edge Function proxying NHTSA vPIC decode + recalls
 ```
 
 ## Development
@@ -72,10 +76,12 @@ Without a `.env` the app boots straight into local-only mode (no auth screens).
 ## Supabase setup (cloud sync)
 
 1. Create a free project at [supabase.com](https://supabase.com).
-2. Open the project's **SQL Editor**, paste the contents of
-   [supabase/migrations/0001_init.sql](supabase/migrations/0001_init.sql), and run it.
-   This creates the `vehicles`, `service_records`, and `reminders` tables with
-   row-level security plus the private `glovebox-media` storage bucket.
+2. Open the project's **SQL Editor** and run the migrations in
+   [supabase/migrations](supabase/migrations) in order:
+   [0001_init.sql](supabase/migrations/0001_init.sql) creates the `vehicles`,
+   `service_records`, and `reminders` tables with row-level security plus the
+   private `glovebox-media` storage bucket; [0002_vin_recalls.sql](supabase/migrations/0002_vin_recalls.sql)
+   adds the VIN decode/recall check columns to `vehicles` (Phase 6).
 3. Copy `.env.example` to `.env` and fill in **Project Settings → API**:
 
    ```bash
@@ -177,7 +183,30 @@ offline and in local-only mode. The report markup is a pure function
 (`lib/report/html.ts`) with unit tests covering sorting, escaping of
 user-entered text, and empty-history handling.
 
-## Current scope (Phases 1–5)
+## VIN decode & recall checks (Phase 6)
+
+From a vehicle's Overview tab, **Decode VIN** and **Check recalls** call the
+[`vin`](supabase/functions/vin/index.ts) Edge Function, which proxies NHTSA's
+free, keyless vPIC (decode) and Recalls APIs — the app never calls NHTSA
+directly, so provider changes and rate limits stay isolated server-side. It's
+a core free utility (no Pro gate, no sign-in required beyond having Supabase
+configured).
+
+- VIN entry is normalized and format-validated on-device
+  (`lib/domain/vin.ts`) before it's ever sent anywhere.
+- Decoded make/model/year/trim/engine and the recall list persist to the
+  local `vehicles` row (as of schema v3) and sync through the existing
+  queue, so they survive restarts and follow the account across devices.
+- Recall status is explicitly three-valued — **unknown** (never checked),
+  **none** (checked, nothing open), or **open** (with component/summary/
+  remedy per recall) — so a missing check is never confused with a clean one.
+- Without the deployed function, the buttons still render but explain that
+  the feature isn't available in this build.
+
+Explicitly out of scope for Phase 6: family/community sharing and fleet-mode
+collaboration — both are single-owner-only for now (see Roadmap).
+
+## Current scope (Phases 1–6)
 
 - Garage: multiple vehicles with photo, mileage, health score
 - Maintenance log: typed service records with cost, shop, receipt photo, next-due prefill
@@ -189,8 +218,11 @@ user-entered text, and empty-history handling.
 - Monetization: free limits (2 vehicles, no receipts), Pro subscription via RevenueCat, paywall, restore
 - AI: receipt scanner, repair explainer, price checker (Pro, via Supabase Edge Function)
 - PDF report: shareable vehicle history / sale report, generated on-device (Pro)
+- VIN decode & recall checks: on-device VIN validation, NHTSA-backed decode and recall
+  status, synced via the existing queue (free, via Supabase Edge Function)
 - Settings: account & sync status, plan & upgrade, data reset
 
 ## Roadmap
 
-- Phase 6 — family sharing, fleet mode, recalls, VIN decode
+- Future — family sharing / community features, fleet-mode collaboration (deliberately
+  excluded from Phase 6 to keep the sync schema and permission model simple)

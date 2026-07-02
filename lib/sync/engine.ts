@@ -34,7 +34,8 @@ const TABLE_CONFIG: Record<SyncTable, TableConfig> = {
   vehicles: {
     columns: [
       'id', 'nickname', 'make', 'model', 'year', 'trim', 'vin', 'license_plate', 'mileage',
-      'purchase_date', 'purchase_price', 'created_at', 'updated_at', 'deleted_at',
+      'purchase_date', 'purchase_price', 'vin_decoded_at', 'vin_decode_json', 'recall_checked_at',
+      'recall_json', 'created_at', 'updated_at', 'deleted_at',
     ],
     mediaLocalColumn: 'photo_uri',
     mediaCloudColumn: 'photo_path',

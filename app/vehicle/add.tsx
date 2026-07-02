@@ -10,6 +10,7 @@ import { createVehicle } from '@/lib/db/vehicleRepo';
 import { canAddVehicle } from '@/lib/monetization/entitlements';
 import { useIsPro } from '@/lib/monetization/purchases';
 import { palette, radius, spacing, typography } from '@/lib/theme';
+import { validateVin } from '@/lib/domain/vin';
 
 type FormValues = {
   nickname: string;
@@ -59,18 +60,27 @@ export default function AddVehicleScreen() {
   }
 
   const onSubmit = handleSubmit((values) => {
+    const vinInput = values.vin.trim();
+    const vinCheck = vinInput ? validateVin(vinInput) : null;
+    // Normalize a well-formed VIN; otherwise keep the raw entry (rare — react-hook-form
+    // already blocks submit on a validation error) rather than silently dropping it.
+    const vin = vinCheck?.valid ? vinCheck.vin : vinInput || null;
     createVehicle({
       nickname: values.nickname.trim(),
       make: values.make.trim(),
       model: values.model.trim(),
       year: Number(values.year),
       trim: values.trim.trim() || null,
-      vin: values.vin.trim() || null,
+      vin,
       licensePlate: values.licensePlate.trim() || null,
       mileage: Number(values.mileage.replace(/[^\d]/g, '') || 0),
       purchaseDate: values.purchaseDate.trim() || null,
       purchasePrice: values.purchasePrice ? Number(values.purchasePrice.replace(/[^\d.]/g, '')) : null,
       photoUri,
+      vinDecodedAt: null,
+      vinDecoded: null,
+      recallCheckedAt: null,
+      recalls: [],
     });
     router.back();
   });
@@ -220,8 +230,22 @@ export default function AddVehicleScreen() {
         <Controller
           control={control}
           name="vin"
-          render={({ field }) => (
-            <Field label="VIN" placeholder="17 characters" autoCapitalize="characters" value={field.value} onChangeText={field.onChange} />
+          rules={{
+            validate: (v) => {
+              if (!v.trim()) return true;
+              const check = validateVin(v);
+              return check.valid || check.reason;
+            },
+          }}
+          render={({ field, fieldState }) => (
+            <Field
+              label="VIN"
+              placeholder="17 characters"
+              autoCapitalize="characters"
+              value={field.value}
+              onChangeText={field.onChange}
+              error={fieldState.error?.message}
+            />
           )}
         />
 
