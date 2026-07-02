@@ -6,15 +6,17 @@ import { Button, Card, DueBadge, EmptyState, Screen, SectionHeader, StatTile } f
 import { useReminders, useServiceRecords, useVehicle } from '@/lib/db/hooks';
 import { completeReminder, deleteReminder } from '@/lib/db/reminderRepo';
 import { deleteServiceRecord } from '@/lib/db/serviceRepo';
-import { deleteVehicle, updateVehicleMileage } from '@/lib/db/vehicleRepo';
+import { deleteVehicle, updateVehicleMileage, updateVehicleRecalls, updateVehicleVinDecode } from '@/lib/db/vehicleRepo';
 import { dueSummary, reminderDueState, todayIso } from '@/lib/domain/due';
 import { formatMoney, summarizeExpenses } from '@/lib/domain/expenses';
 import { healthScore } from '@/lib/domain/healthScore';
 import { serviceTypeLabel } from '@/lib/domain/serviceTypes';
+import { decodedVinSummary, recallStatus } from '@/lib/domain/vin';
 import { canExportReport } from '@/lib/monetization/entitlements';
 import { useIsPro } from '@/lib/monetization/purchases';
 import { shareVehicleReport } from '@/lib/report/export';
 import { palette, radius, spacing, typography } from '@/lib/theme';
+import { checkRecalls, decodeVin, vinAvailability } from '@/lib/vin/client';
 
 const TABS = ['Overview', 'Maintenance', 'Expenses', 'Reminders'] as const;
 type Tab = (typeof TABS)[number];
@@ -28,6 +30,8 @@ export default function VehicleDetailScreen() {
   const [tab, setTab] = useState<Tab>('Overview');
   const [mileageDraft, setMileageDraft] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [decoding, setDecoding] = useState(false);
+  const [checkingRecalls, setCheckingRecalls] = useState(false);
   const isPro = useIsPro();
 
   if (!vehicle) {
@@ -41,6 +45,8 @@ export default function VehicleDetailScreen() {
   const today = todayIso();
   const health = healthScore({ vehicle, records, reminders, today });
   const expenses = summarizeExpenses(records, today);
+  const recallState = recallStatus({ checkedAt: vehicle.recallCheckedAt, recalls: vehicle.recalls });
+  const decodedSummary = vehicle.vinDecoded ? decodedVinSummary(vehicle.vinDecoded) : null;
 
   function commitMileage() {
     if (mileageDraft == null || !vehicle) return;
@@ -68,6 +74,45 @@ export default function VehicleDetailScreen() {
       Alert.alert('Export failed', e instanceof Error ? e.message : 'Try again later.');
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function onDecodeVin() {
+    if (!vehicle?.vin || decoding) return;
+    const availability = vinAvailability();
+    if (!availability.available) {
+      Alert.alert('VIN decode unavailable', availability.reason);
+      return;
+    }
+    setDecoding(true);
+    try {
+      const decoded = await decodeVin(vehicle.vin);
+      updateVehicleVinDecode(vehicle.id, vehicle.vin, decoded);
+      if (!decoded.decodable) {
+        Alert.alert('Could not decode', 'This VIN did not return recognizable vehicle data.');
+      }
+    } catch (e) {
+      Alert.alert('Decode failed', e instanceof Error ? e.message : 'Try again later.');
+    } finally {
+      setDecoding(false);
+    }
+  }
+
+  async function onCheckRecalls() {
+    if (!vehicle || checkingRecalls) return;
+    const availability = vinAvailability();
+    if (!availability.available) {
+      Alert.alert('Recall check unavailable', availability.reason);
+      return;
+    }
+    setCheckingRecalls(true);
+    try {
+      const recalls = await checkRecalls(vehicle.make, vehicle.model, vehicle.year);
+      updateVehicleRecalls(vehicle.id, recalls);
+    } catch (e) {
+      Alert.alert('Recall check failed', e instanceof Error ? e.message : 'Try again later.');
+    } finally {
+      setCheckingRecalls(false);
     }
   }
 
@@ -166,6 +211,51 @@ export default function VehicleDetailScreen() {
                 last
               />
             </Card>
+
+            <SectionHeader title="VIN & Recalls" />
+            <Card>
+              <DetailRow
+                label="Decoded as"
+                value={decodedSummary ?? (vehicle.vin ? 'Not decoded yet' : 'Add a VIN to decode')}
+              />
+              <DetailRow
+                label="Recall status"
+                value={
+                  recallState === 'unknown'
+                    ? 'Not checked yet'
+                    : recallState === 'none'
+                      ? `No open recalls · checked ${vehicle.recallCheckedAt?.slice(0, 10) ?? today}`
+                      : `${vehicle.recalls.length} open recall${vehicle.recalls.length > 1 ? 's' : ''}`
+                }
+                last={recallState !== 'open'}
+              />
+              {recallState === 'open' &&
+                vehicle.recalls.map((r, i) => (
+                  <View key={r.id} style={[styles.recallItem, i === vehicle.recalls.length - 1 && { borderBottomWidth: 0 }]}>
+                    <Text style={styles.recallComponent}>{r.component ?? 'Recall'}</Text>
+                    {r.summary != null && <Text style={styles.recordNotes}>{r.summary}</Text>}
+                    {r.remedy != null && <Text style={styles.recallRemedy}>Remedy: {r.remedy}</Text>}
+                  </View>
+                ))}
+            </Card>
+            <View style={styles.twoCol}>
+              <Button
+                title="Decode VIN"
+                variant="secondary"
+                loading={decoding}
+                disabled={!vehicle.vin}
+                onPress={() => void onDecodeVin()}
+                style={{ flex: 1, marginTop: spacing.md }}
+              />
+              <Button
+                title="Check recalls"
+                variant="secondary"
+                loading={checkingRecalls}
+                onPress={() => void onCheckRecalls()}
+                style={{ flex: 1, marginTop: spacing.md }}
+              />
+            </View>
+
             <Button
               title="Export PDF report"
               variant="secondary"
@@ -408,6 +498,18 @@ const styles = StyleSheet.create({
   detailRowBorder: { borderBottomWidth: 1, borderBottomColor: palette.border.subtle },
   detailLabel: { color: palette.text.secondary, fontSize: typography.body.size },
   detailValue: { color: palette.text.primary, fontSize: typography.body.size, fontWeight: '500' },
+  twoCol: { flexDirection: 'row', gap: spacing.md },
+  recallItem: {
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border.subtle,
+  },
+  recallComponent: {
+    color: palette.status.overdue,
+    fontSize: typography.bodyEmphasis.size,
+    fontWeight: typography.bodyEmphasis.weight,
+  },
+  recallRemedy: { color: palette.text.secondary, fontSize: typography.caption.size, marginTop: spacing.xs },
   recordHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   recordType: {
     color: palette.text.primary,

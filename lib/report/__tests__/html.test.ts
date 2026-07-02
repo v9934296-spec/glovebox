@@ -14,6 +14,10 @@ const vehicle: Vehicle = {
   purchaseDate: '2021-03-01',
   purchasePrice: 18500,
   photoUri: null,
+  vinDecodedAt: null,
+  vinDecoded: null,
+  recallCheckedAt: null,
+  recalls: [],
   createdAt: '2021-03-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
 };

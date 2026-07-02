@@ -3,6 +3,33 @@ import { z } from 'zod';
 /** ISO date string (YYYY-MM-DD). Times are not needed for vehicle records. */
 export const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
 
+/** Decoded VIN attributes from the vPIC provider (Phase 6). Untrusted input; parsed in lib/domain/vin.ts. */
+export const decodedVinSchema = z.object({
+  vin: z.string(),
+  make: z.string().nullable(),
+  model: z.string().nullable(),
+  modelYear: z.number().int().nullable(),
+  trim: z.string().nullable(),
+  bodyClass: z.string().nullable(),
+  engineCylinders: z.string().nullable(),
+  driveType: z.string().nullable(),
+  fuelType: z.string().nullable(),
+  plantCountry: z.string().nullable(),
+  decodable: z.boolean(),
+});
+export type DecodedVin = z.infer<typeof decodedVinSchema>;
+
+/** A single open recall from the NHTSA provider (Phase 6). */
+export const recallSchema = z.object({
+  id: z.string(),
+  component: z.string().nullable(),
+  summary: z.string().nullable(),
+  consequence: z.string().nullable(),
+  remedy: z.string().nullable(),
+  reportedDate: z.string().nullable(),
+});
+export type Recall = z.infer<typeof recallSchema>;
+
 export const vehicleSchema = z.object({
   id: z.string(),
   nickname: z.string().min(1, 'Give it a name'),
@@ -16,6 +43,12 @@ export const vehicleSchema = z.object({
   purchaseDate: isoDate.nullable(),
   purchasePrice: z.number().min(0).nullable(),
   photoUri: z.string().nullable(),
+  /** Set when the VIN was last successfully decoded; null means never decoded. */
+  vinDecodedAt: z.string().nullable(),
+  vinDecoded: decodedVinSchema.nullable(),
+  /** Set when a recall check last ran; null means never checked (shown as "unknown", not "none"). */
+  recallCheckedAt: z.string().nullable(),
+  recalls: z.array(recallSchema),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
