@@ -6,6 +6,8 @@ import { Button, Card, Screen, SectionHeader } from '@/components/ui';
 import { useAuth } from '@/lib/auth/session';
 import { resetAllData } from '@/lib/db/database';
 import { useVehicles } from '@/lib/db/hooks';
+import { FREE_LIMITS } from '@/lib/monetization/entitlements';
+import { useEntitlements } from '@/lib/monetization/purchases';
 import { syncNow, useSyncStatus } from '@/lib/sync/engine';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { palette, spacing, typography } from '@/lib/theme';
@@ -15,6 +17,7 @@ export default function SettingsScreen() {
   const vehicles = useVehicles();
   const { status, session, signOut } = useAuth();
   const { syncing, lastSyncedAt, pending, error } = useSyncStatus();
+  const { status: purchasesStatus, isPro } = useEntitlements();
 
   function confirmReset() {
     Alert.alert(
@@ -94,10 +97,33 @@ export default function SettingsScreen() {
         </Card>
         <Text style={styles.hint}>Metric units and other currencies are coming later.</Text>
 
+        <SectionHeader title="Glovebox Pro" />
+        <Card>
+          <Row label="Plan" value={isPro ? 'Pro' : 'Free'} />
+          <Row
+            label="Vehicles"
+            value={isPro ? `${vehicles.length} (unlimited)` : `${vehicles.length} of ${FREE_LIMITS.maxVehicles}`}
+            last
+          />
+        </Card>
+        {isPro ? (
+          <Text style={styles.hint}>Manage or cancel your subscription in your store account settings.</Text>
+        ) : (
+          <>
+            <Button
+              title="Upgrade to Pro"
+              onPress={() => router.push('/paywall')}
+              style={{ marginTop: spacing.md }}
+            />
+            {purchasesStatus === 'unavailable' && (
+              <Text style={styles.hint}>Purchases are not available in this build.</Text>
+            )}
+          </>
+        )}
+
         <SectionHeader title="Coming soon" />
         <Card>
           <Row label="Notifications" value="Soon" />
-          <Row label="Glovebox Pro" value="Phase 3" />
           <Row label="PDF vehicle report" value="Phase 5" last />
         </Card>
 

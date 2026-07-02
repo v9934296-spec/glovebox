@@ -4,8 +4,11 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Field, SectionHeader } from '@/components/ui';
+import { Button, EmptyState, Field, Screen, SectionHeader } from '@/components/ui';
+import { useVehicles } from '@/lib/db/hooks';
 import { createVehicle } from '@/lib/db/vehicleRepo';
+import { canAddVehicle } from '@/lib/monetization/entitlements';
+import { useIsPro } from '@/lib/monetization/purchases';
 import { palette, radius, spacing, typography } from '@/lib/theme';
 
 type FormValues = {
@@ -25,6 +28,9 @@ const CURRENT_YEAR = new Date().getFullYear();
 
 export default function AddVehicleScreen() {
   const router = useRouter();
+  const vehicles = useVehicles();
+  const isPro = useIsPro();
+  const gate = canAddVehicle(vehicles.length, isPro);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const { control, handleSubmit } = useForm<FormValues>({
     defaultValues: {
@@ -68,6 +74,23 @@ export default function AddVehicleScreen() {
     });
     router.back();
   });
+
+  if (!gate.allowed) {
+    return (
+      <Screen>
+        <EmptyState
+          title="Garage is full (free plan)"
+          message={gate.reason}
+          action={
+            <View style={{ gap: spacing.md }}>
+              <Button title="Upgrade to Pro" onPress={() => router.push('/paywall')} />
+              <Button title="Not now" variant="ghost" onPress={() => router.back()} />
+            </View>
+          }
+        />
+      </Screen>
+    );
+  }
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
