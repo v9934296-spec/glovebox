@@ -45,6 +45,9 @@ lib/auth/session.ts     # Supabase auth store (sign in/up/out, local-only mode)
 lib/monetization/       # Glovebox Pro
   entitlements.ts       #   pure gating rules: free limits, Pro features (unit tested)
   purchases.ts          #   RevenueCat wrapper: entitlement store, purchase/restore
+lib/report/             # Phase 5 PDF vehicle history report
+  html.ts               #   pure report HTML builder (unit tested)
+  export.ts             #   expo-print PDF generation + share sheet
 lib/sync/               # offline-first sync
   queue.ts              #   sync_queue writes + sync_state cursors
   merge.ts              #   pure LWW conflict logic (unit tested)
@@ -108,7 +111,7 @@ The free plan covers the core tracker; Pro removes limits:
 | Maintenance log & reminders | Full | Full |
 | Receipt photos | — | Included |
 | AI receipt scanner & repair assistant | — | Included |
-| PDF report (Phase 5) | — | Included when it ships |
+| PDF vehicle history report | — | Included |
 
 All gating rules live in `lib/monetization/entitlements.ts`; screens call
 `canAddVehicle` / `canAttachReceipt` and send blocked users to the paywall.
@@ -164,7 +167,17 @@ isn't available in this build. Responses are validated in
 `lib/ai/parse.ts` — malformed model output degrades to fewer prefilled
 fields rather than crashes.
 
-## Current scope (Phases 1–4)
+## PDF vehicle history report (Phase 5)
+
+From a vehicle's Overview tab, **Export PDF report** (Pro) renders a polished,
+print-styled report — vehicle identity and VIN, health score, cost-of-ownership
+summary, and the full service history with notes — and opens the system share
+sheet. Generation happens entirely on-device with `expo-print`, so it works
+offline and in local-only mode. The report markup is a pure function
+(`lib/report/html.ts`) with unit tests covering sorting, escaping of
+user-entered text, and empty-history handling.
+
+## Current scope (Phases 1–5)
 
 - Garage: multiple vehicles with photo, mileage, health score
 - Maintenance log: typed service records with cost, shop, receipt photo, next-due prefill
@@ -175,9 +188,9 @@ fields rather than crashes.
 - Cloud sync: offline-first queue, LWW merge, soft deletes, photo/receipt storage
 - Monetization: free limits (2 vehicles, no receipts), Pro subscription via RevenueCat, paywall, restore
 - AI: receipt scanner, repair explainer, price checker (Pro, via Supabase Edge Function)
+- PDF report: shareable vehicle history / sale report, generated on-device (Pro)
 - Settings: account & sync status, plan & upgrade, data reset
 
 ## Roadmap
 
-- Phase 5 — PDF vehicle history / sale report
 - Phase 6 — family sharing, fleet mode, recalls, VIN decode

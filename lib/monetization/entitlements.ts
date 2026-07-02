@@ -38,11 +38,19 @@ export function canUseAi(isPro: boolean): GateResult {
   };
 }
 
+export function canExportReport(isPro: boolean): GateResult {
+  if (isPro) return { allowed: true };
+  return {
+    allowed: false,
+    reason: 'The PDF vehicle history report is a Glovebox Pro feature. Upgrade to export a shareable service record.',
+  };
+}
+
 /** Marketing copy shown on the paywall and in Settings. */
 export const PRO_FEATURES: ReadonlyArray<{ title: string; detail: string }> = [
   { title: 'Unlimited garage', detail: `Track more than ${FREE_LIMITS.maxVehicles} vehicles` },
   { title: 'Receipt photos', detail: 'Attach receipts to every service record' },
   { title: 'AI receipt scanner', detail: 'Snap a receipt and the service record fills itself in' },
   { title: 'AI repair assistant', detail: 'Plain-language explanations and fair-price checks for any repair' },
-  { title: 'PDF vehicle history', detail: 'Coming in a future update — included in Pro' },
+  { title: 'PDF vehicle history', detail: 'Export a polished service report — great when selling' },
 ];

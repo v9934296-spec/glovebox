@@ -1,4 +1,4 @@
-import { canAddVehicle, canAttachReceipt, canUseAi, FREE_LIMITS } from '../entitlements';
+import { canAddVehicle, canAttachReceipt, canExportReport, canUseAi, FREE_LIMITS } from '../entitlements';
 
 describe('canAddVehicle', () => {
   it('allows free users under the vehicle limit', () => {
@@ -43,5 +43,17 @@ describe('canUseAi', () => {
 
   it('allows Pro users', () => {
     expect(canUseAi(true).allowed).toBe(true);
+  });
+});
+
+describe('canExportReport', () => {
+  it('blocks free users with a reason', () => {
+    const result = canExportReport(false);
+    expect(result.allowed).toBe(false);
+    if (!result.allowed) expect(result.reason).toContain('Pro');
+  });
+
+  it('allows Pro users', () => {
+    expect(canExportReport(true).allowed).toBe(true);
   });
 });

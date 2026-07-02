@@ -11,6 +11,9 @@ import { dueSummary, reminderDueState, todayIso } from '@/lib/domain/due';
 import { formatMoney, summarizeExpenses } from '@/lib/domain/expenses';
 import { healthScore } from '@/lib/domain/healthScore';
 import { serviceTypeLabel } from '@/lib/domain/serviceTypes';
+import { canExportReport } from '@/lib/monetization/entitlements';
+import { useIsPro } from '@/lib/monetization/purchases';
+import { shareVehicleReport } from '@/lib/report/export';
 import { palette, radius, spacing, typography } from '@/lib/theme';
 
 const TABS = ['Overview', 'Maintenance', 'Expenses', 'Reminders'] as const;
@@ -24,6 +27,8 @@ export default function VehicleDetailScreen() {
   const reminders = useReminders({ vehicleId: id, status: 'active' });
   const [tab, setTab] = useState<Tab>('Overview');
   const [mileageDraft, setMileageDraft] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const isPro = useIsPro();
 
   if (!vehicle) {
     return (
@@ -44,6 +49,26 @@ export default function VehicleDetailScreen() {
       updateVehicleMileage(vehicle.id, n);
     }
     setMileageDraft(null);
+  }
+
+  async function exportReport() {
+    if (!vehicle || exporting) return;
+    const gate = canExportReport(isPro);
+    if (!gate.allowed) {
+      Alert.alert('Glovebox Pro', gate.reason, [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'See Pro', onPress: () => router.push('/paywall') },
+      ]);
+      return;
+    }
+    setExporting(true);
+    try {
+      await shareVehicleReport(vehicle, records, reminders);
+    } catch (e: unknown) {
+      Alert.alert('Export failed', e instanceof Error ? e.message : 'Try again later.');
+    } finally {
+      setExporting(false);
+    }
   }
 
   function confirmDeleteVehicle() {
@@ -142,10 +167,17 @@ export default function VehicleDetailScreen() {
               />
             </Card>
             <Button
+              title="Export PDF report"
+              variant="secondary"
+              loading={exporting}
+              onPress={() => void exportReport()}
+              style={{ marginTop: spacing.xl }}
+            />
+            <Button
               title="Ask AI about a repair"
               variant="secondary"
               onPress={() => router.push({ pathname: '/ai/assistant', params: { vehicleId: vehicle.id } })}
-              style={{ marginTop: spacing.xl }}
+              style={{ marginTop: spacing.md }}
             />
             <Button
               title="Delete vehicle"
