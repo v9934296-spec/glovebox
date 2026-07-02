@@ -1,4 +1,5 @@
 import type { NewVehicle, Vehicle } from '../domain/types';
+import { enqueueChange } from '../sync/queue';
 import { bumpDataVersion, getDb, newId, nowIso } from './database';
 
 type VehicleRow = {
@@ -38,12 +39,17 @@ function fromRow(r: VehicleRow): Vehicle {
 }
 
 export function listVehicles(): Vehicle[] {
-  const rows = getDb().getAllSync<VehicleRow>('SELECT * FROM vehicles ORDER BY created_at ASC');
+  const rows = getDb().getAllSync<VehicleRow>(
+    'SELECT * FROM vehicles WHERE deleted_at IS NULL ORDER BY created_at ASC',
+  );
   return rows.map(fromRow);
 }
 
 export function getVehicle(id: string): Vehicle | null {
-  const row = getDb().getFirstSync<VehicleRow>('SELECT * FROM vehicles WHERE id = ?', [id]);
+  const row = getDb().getFirstSync<VehicleRow>(
+    'SELECT * FROM vehicles WHERE id = ? AND deleted_at IS NULL',
+    [id],
+  );
   return row ? fromRow(row) : null;
 }
 
@@ -71,16 +77,44 @@ export function createVehicle(input: NewVehicle): Vehicle {
       ts,
     ],
   );
+  enqueueChange('vehicles', id);
   bumpDataVersion();
   return { ...input, id, createdAt: ts, updatedAt: ts };
 }
 
 export function updateVehicleMileage(id: string, mileage: number) {
   getDb().runSync('UPDATE vehicles SET mileage = ?, updated_at = ? WHERE id = ?', [mileage, nowIso(), id]);
+  enqueueChange('vehicles', id);
   bumpDataVersion();
 }
 
+/** Soft delete so the deletion syncs to other devices; children go with it. */
 export function deleteVehicle(id: string) {
-  getDb().runSync('DELETE FROM vehicles WHERE id = ?', [id]);
+  const db = getDb();
+  const ts = nowIso();
+  const children = {
+    service_records: db.getAllSync<{ id: string }>(
+      'SELECT id FROM service_records WHERE vehicle_id = ? AND deleted_at IS NULL',
+      [id],
+    ),
+    reminders: db.getAllSync<{ id: string }>(
+      'SELECT id FROM reminders WHERE vehicle_id = ? AND deleted_at IS NULL',
+      [id],
+    ),
+  };
+  db.withTransactionSync(() => {
+    db.runSync('UPDATE vehicles SET deleted_at = ?, updated_at = ? WHERE id = ?', [ts, ts, id]);
+    db.runSync(
+      'UPDATE service_records SET deleted_at = ?, updated_at = ? WHERE vehicle_id = ? AND deleted_at IS NULL',
+      [ts, ts, id],
+    );
+    db.runSync(
+      'UPDATE reminders SET deleted_at = ?, updated_at = ? WHERE vehicle_id = ? AND deleted_at IS NULL',
+      [ts, ts, id],
+    );
+  });
+  enqueueChange('vehicles', id);
+  for (const r of children.service_records) enqueueChange('service_records', r.id);
+  for (const r of children.reminders) enqueueChange('reminders', r.id);
   bumpDataVersion();
 }

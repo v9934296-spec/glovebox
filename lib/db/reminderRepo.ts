@@ -1,5 +1,6 @@
 import { nextOccurrence, todayIso } from '../domain/due';
 import type { NewReminder, Reminder } from '../domain/types';
+import { enqueueChange } from '../sync/queue';
 import { bumpDataVersion, getDb, newId, nowIso } from './database';
 
 type ReminderRow = {
@@ -37,7 +38,7 @@ function fromRow(r: ReminderRow): Reminder {
 }
 
 export function listReminders(filter?: { vehicleId?: string; status?: Reminder['status'] }): Reminder[] {
-  const clauses: string[] = [];
+  const clauses: string[] = ['deleted_at IS NULL'];
   const params: (string | number)[] = [];
   if (filter?.vehicleId) {
     clauses.push('vehicle_id = ?');
@@ -47,7 +48,7 @@ export function listReminders(filter?: { vehicleId?: string; status?: Reminder['
     clauses.push('status = ?');
     params.push(filter.status);
   }
-  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  const where = `WHERE ${clauses.join(' AND ')}`;
   const rows = getDb().getAllSync<ReminderRow>(
     `SELECT * FROM reminders ${where} ORDER BY due_date IS NULL, due_date ASC, due_mileage ASC`,
     params,
@@ -77,6 +78,7 @@ export function createReminder(input: NewReminder): Reminder {
       ts,
     ],
   );
+  enqueueChange('reminders', id);
   bumpDataVersion();
   return { ...input, id, status: 'active', completedAt: null, createdAt: ts, updatedAt: ts };
 }
@@ -99,10 +101,13 @@ export function completeReminder(reminder: Reminder, currentMileage: number) {
       [ts, ts, reminder.id],
     );
   }
+  enqueueChange('reminders', reminder.id);
   bumpDataVersion();
 }
 
 export function deleteReminder(id: string) {
-  getDb().runSync('DELETE FROM reminders WHERE id = ?', [id]);
+  const ts = nowIso();
+  getDb().runSync('UPDATE reminders SET deleted_at = ?, updated_at = ? WHERE id = ?', [ts, ts, id]);
+  enqueueChange('reminders', id);
   bumpDataVersion();
 }

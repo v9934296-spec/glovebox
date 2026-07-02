@@ -1,4 +1,5 @@
 import type { NewServiceRecord, ServiceRecord } from '../domain/types';
+import { enqueueChange } from '../sync/queue';
 import { bumpDataVersion, getDb, newId, nowIso } from './database';
 
 type ServiceRow = {
@@ -37,14 +38,16 @@ function fromRow(r: ServiceRow): ServiceRecord {
 
 export function listServiceRecords(vehicleId: string): ServiceRecord[] {
   const rows = getDb().getAllSync<ServiceRow>(
-    'SELECT * FROM service_records WHERE vehicle_id = ? ORDER BY date DESC, created_at DESC',
+    'SELECT * FROM service_records WHERE vehicle_id = ? AND deleted_at IS NULL ORDER BY date DESC, created_at DESC',
     [vehicleId],
   );
   return rows.map(fromRow);
 }
 
 export function listAllServiceRecords(): ServiceRecord[] {
-  const rows = getDb().getAllSync<ServiceRow>('SELECT * FROM service_records ORDER BY date DESC');
+  const rows = getDb().getAllSync<ServiceRow>(
+    'SELECT * FROM service_records WHERE deleted_at IS NULL ORDER BY date DESC',
+  );
   return rows.map(fromRow);
 }
 
@@ -71,11 +74,14 @@ export function createServiceRecord(input: NewServiceRecord): ServiceRecord {
       ts,
     ],
   );
+  enqueueChange('service_records', id);
   bumpDataVersion();
   return { ...input, id, createdAt: ts, updatedAt: ts };
 }
 
 export function deleteServiceRecord(id: string) {
-  getDb().runSync('DELETE FROM service_records WHERE id = ?', [id]);
+  const ts = nowIso();
+  getDb().runSync('UPDATE service_records SET deleted_at = ?, updated_at = ? WHERE id = ?', [ts, ts, id]);
+  enqueueChange('service_records', id);
   bumpDataVersion();
 }

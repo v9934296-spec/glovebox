@@ -1,18 +1,25 @@
 import Constants from 'expo-constants';
+import { useRouter } from 'expo-router';
 import React from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Screen, SectionHeader } from '@/components/ui';
+import { useAuth } from '@/lib/auth/session';
 import { resetAllData } from '@/lib/db/database';
 import { useVehicles } from '@/lib/db/hooks';
+import { syncNow, useSyncStatus } from '@/lib/sync/engine';
+import { isSupabaseConfigured } from '@/lib/supabase';
 import { palette, spacing, typography } from '@/lib/theme';
 
 export default function SettingsScreen() {
+  const router = useRouter();
   const vehicles = useVehicles();
+  const { status, session, signOut } = useAuth();
+  const { syncing, lastSyncedAt, pending, error } = useSyncStatus();
 
   function confirmReset() {
     Alert.alert(
       'Erase all data',
-      'This permanently deletes every vehicle, service record, and reminder on this device. There is no undo.',
+      'This permanently deletes every vehicle, service record, and reminder on this device. Cloud copies (if you sync) are not touched. There is no undo.',
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Erase everything', style: 'destructive', onPress: () => resetAllData() },
@@ -20,20 +27,76 @@ export default function SettingsScreen() {
     );
   }
 
+  function confirmSignOut() {
+    Alert.alert('Sign out', 'Your data stays on this device and stops syncing until you sign in again.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign out',
+        style: 'destructive',
+        onPress: () => {
+          void signOut().catch((e: unknown) => {
+            Alert.alert('Sign out failed', e instanceof Error ? e.message : 'Try again.');
+          });
+        },
+      },
+    ]);
+  }
+
   return (
     <Screen style={{ padding: 0 }}>
       <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'] }}>
+        <SectionHeader title="Account & sync" />
+        {status === 'signedIn' ? (
+          <>
+            <Card>
+              <Row label="Signed in as" value={session?.user.email ?? '—'} />
+              <Row label="Pending changes" value={String(pending)} />
+              <Row label="Last synced" value={lastSyncedAt ? formatTimestamp(lastSyncedAt) : 'never'} last />
+            </Card>
+            {error != null && <Text style={styles.syncError}>Last sync error: {error}</Text>}
+            <View style={styles.accountButtons}>
+              <Button
+                title={syncing ? 'Syncing…' : 'Sync now'}
+                variant="secondary"
+                loading={syncing}
+                onPress={() => void syncNow()}
+                style={{ flex: 1 }}
+              />
+              <Button title="Sign out" variant="ghost" onPress={confirmSignOut} style={{ flex: 1 }} />
+            </View>
+          </>
+        ) : isSupabaseConfigured ? (
+          <>
+            <Card>
+              <Text style={styles.localOnlyText}>
+                You're in local-only mode. Everything stays on this device — sign in to back up your garage and
+                sync across devices.
+              </Text>
+            </Card>
+            <Button
+              title="Sign in or create account"
+              onPress={() => router.push('/(auth)/sign-in')}
+              style={{ marginTop: spacing.md }}
+            />
+          </>
+        ) : (
+          <Card>
+            <Text style={styles.localOnlyText}>
+              Cloud sync is not configured in this build. All data stays on this device.
+            </Text>
+          </Card>
+        )}
+
         <SectionHeader title="Units" />
         <Card>
           <Row label="Distance" value="Miles" />
           <Row label="Currency" value="USD" last />
         </Card>
-        <Text style={styles.hint}>Metric units and other currencies are coming with cloud sync.</Text>
+        <Text style={styles.hint}>Metric units and other currencies are coming later.</Text>
 
         <SectionHeader title="Coming soon" />
         <Card>
-          <Row label="Cloud sync & accounts" value="Phase 2" />
-          <Row label="Notifications" value="Phase 2" />
+          <Row label="Notifications" value="Soon" />
           <Row label="Glovebox Pro" value="Phase 3" />
           <Row label="PDF vehicle report" value="Phase 5" last />
         </Card>
@@ -44,12 +107,15 @@ export default function SettingsScreen() {
         </Card>
         <Button title="Erase all data" variant="danger" onPress={confirmReset} style={{ marginTop: spacing.lg }} />
 
-        <Text style={styles.version}>
-          Glovebox {Constants.expoConfig?.version ?? ''} · local-only build, your data never leaves this device
-        </Text>
+        <Text style={styles.version}>Glovebox {Constants.expoConfig?.version ?? ''}</Text>
       </ScrollView>
     </Screen>
   );
+}
+
+function formatTimestamp(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
 }
 
 function Row({ label, value, last }: { label: string; value: string; last?: boolean }) {
@@ -67,6 +133,13 @@ const styles = StyleSheet.create({
   rowLabel: { color: palette.text.primary, fontSize: typography.body.size },
   rowValue: { color: palette.text.tertiary, fontSize: typography.body.size },
   hint: { color: palette.text.tertiary, fontSize: typography.caption.size, marginTop: spacing.sm },
+  localOnlyText: {
+    color: palette.text.secondary,
+    fontSize: typography.body.size,
+    lineHeight: typography.body.lineHeight,
+  },
+  accountButtons: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.md },
+  syncError: { color: palette.status.overdue, fontSize: typography.caption.size, marginTop: spacing.sm },
   version: {
     color: palette.text.tertiary,
     fontSize: typography.caption.size,

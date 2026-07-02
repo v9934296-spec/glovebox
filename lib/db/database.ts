@@ -3,7 +3,7 @@ import { create } from 'zustand';
 
 let db: SQLiteDatabase | null = null;
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const MIGRATIONS: Record<number, string> = {
   1: `
@@ -58,6 +58,26 @@ const MIGRATIONS: Record<number, string> = {
     );
     CREATE INDEX IF NOT EXISTS idx_reminders_vehicle_status ON reminders(vehicle_id, status);
   `,
+  // Phase 2: cloud sync metadata. deleted_at enables soft deletes that propagate;
+  // sync_queue records pending pushes; sync_state stores per-table pull cursors.
+  2: `
+    ALTER TABLE vehicles ADD COLUMN deleted_at TEXT;
+    ALTER TABLE service_records ADD COLUMN deleted_at TEXT;
+    ALTER TABLE reminders ADD COLUMN deleted_at TEXT;
+
+    CREATE TABLE IF NOT EXISTS sync_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      table_name TEXT NOT NULL,
+      row_id TEXT NOT NULL,
+      queued_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_sync_queue_row ON sync_queue(table_name, row_id);
+
+    CREATE TABLE IF NOT EXISTS sync_state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `,
 };
 
 export function getDb(): SQLiteDatabase {
@@ -84,11 +104,13 @@ function migrate(database: SQLiteDatabase) {
   }
 }
 
-/** Wipe all user data (Settings → reset). Keeps schema. */
+/** Wipe all user data (Settings → reset). Keeps schema. Sync state is wiped too. */
 export function resetAllData() {
   const database = getDb();
   database.withTransactionSync(() => {
-    database.execSync('DELETE FROM reminders; DELETE FROM service_records; DELETE FROM vehicles;');
+    database.execSync(
+      'DELETE FROM reminders; DELETE FROM service_records; DELETE FROM vehicles; DELETE FROM sync_queue; DELETE FROM sync_state;',
+    );
   });
   bumpDataVersion();
 }
