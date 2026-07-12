@@ -73,28 +73,31 @@ export function getVehicle(id: string): Vehicle | null {
 export function createVehicle(input: NewVehicle): Vehicle {
   const id = newId();
   const ts = nowIso();
-  getDb().runSync(
-    `INSERT INTO vehicles (id, nickname, make, model, year, trim, vin, license_plate, mileage,
-       purchase_date, purchase_price, photo_uri, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id,
-      input.nickname,
-      input.make,
-      input.model,
-      input.year,
-      input.trim,
-      input.vin,
-      input.licensePlate,
-      input.mileage,
-      input.purchaseDate,
-      input.purchasePrice,
-      input.photoUri,
-      ts,
-      ts,
-    ],
-  );
-  enqueueChange('vehicles', id);
+  const db = getDb();
+  db.withTransactionSync(() => {
+    db.runSync(
+      `INSERT INTO vehicles (id, nickname, make, model, year, trim, vin, license_plate, mileage,
+         purchase_date, purchase_price, photo_uri, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        input.nickname,
+        input.make,
+        input.model,
+        input.year,
+        input.trim,
+        input.vin,
+        input.licensePlate,
+        input.mileage,
+        input.purchaseDate,
+        input.purchasePrice,
+        input.photoUri,
+        ts,
+        ts,
+      ],
+    );
+    enqueueChange('vehicles', id);
+  });
   bumpDataVersion();
   return {
     ...input,
@@ -109,30 +112,39 @@ export function createVehicle(input: NewVehicle): Vehicle {
 }
 
 export function updateVehicleMileage(id: string, mileage: number) {
-  getDb().runSync('UPDATE vehicles SET mileage = ?, updated_at = ? WHERE id = ?', [mileage, nowIso(), id]);
-  enqueueChange('vehicles', id);
+  const db = getDb();
+  db.withTransactionSync(() => {
+    db.runSync('UPDATE vehicles SET mileage = ?, updated_at = ? WHERE id = ?', [mileage, nowIso(), id]);
+    enqueueChange('vehicles', id);
+  });
   bumpDataVersion();
 }
 
 /** Persists a successful VIN decode; the VIN itself is normalized/validated on-device first. */
 export function updateVehicleVinDecode(id: string, vin: string, decoded: DecodedVin) {
   const ts = nowIso();
-  getDb().runSync(
-    'UPDATE vehicles SET vin = ?, vin_decoded_at = ?, vin_decode_json = ?, updated_at = ? WHERE id = ?',
-    [vin, ts, JSON.stringify(decoded), ts, id],
-  );
-  enqueueChange('vehicles', id);
+  const db = getDb();
+  db.withTransactionSync(() => {
+    db.runSync(
+      'UPDATE vehicles SET vin = ?, vin_decoded_at = ?, vin_decode_json = ?, updated_at = ? WHERE id = ?',
+      [vin, ts, JSON.stringify(decoded), ts, id],
+    );
+    enqueueChange('vehicles', id);
+  });
   bumpDataVersion();
 }
 
 /** Persists a recall check result. An empty array with a fresh timestamp means "checked, none open". */
 export function updateVehicleRecalls(id: string, recalls: Recall[]) {
   const ts = nowIso();
-  getDb().runSync(
-    'UPDATE vehicles SET recall_checked_at = ?, recall_json = ?, updated_at = ? WHERE id = ?',
-    [ts, JSON.stringify(recalls), ts, id],
-  );
-  enqueueChange('vehicles', id);
+  const db = getDb();
+  db.withTransactionSync(() => {
+    db.runSync(
+      'UPDATE vehicles SET recall_checked_at = ?, recall_json = ?, updated_at = ? WHERE id = ?',
+      [ts, JSON.stringify(recalls), ts, id],
+    );
+    enqueueChange('vehicles', id);
+  });
   bumpDataVersion();
 }
 
@@ -160,9 +172,9 @@ export function deleteVehicle(id: string) {
       'UPDATE reminders SET deleted_at = ?, updated_at = ? WHERE vehicle_id = ? AND deleted_at IS NULL',
       [ts, ts, id],
     );
+    enqueueChange('vehicles', id);
+    for (const r of children.service_records) enqueueChange('service_records', r.id);
+    for (const r of children.reminders) enqueueChange('reminders', r.id);
   });
-  enqueueChange('vehicles', id);
-  for (const r of children.service_records) enqueueChange('service_records', r.id);
-  for (const r of children.reminders) enqueueChange('reminders', r.id);
   bumpDataVersion();
 }

@@ -1,3 +1,4 @@
+import * as Linking from 'expo-linking';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
@@ -15,13 +16,30 @@ export default function RootLayout() {
   const status = useAuth((s) => s.status);
   const session = useAuth((s) => s.session);
   const initialize = useAuth((s) => s.initialize);
+  const handleAuthUrl = useAuth((s) => s.handleAuthUrl);
   const initializePurchases = useEntitlements((s) => s.initialize);
   const purchasesStatus = useEntitlements((s) => s.status);
 
   useEffect(() => {
-    void initialize();
     void initializePurchases();
-  }, [initialize, initializePurchases]);
+  }, [initializePurchases]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      await initialize();
+      const url = await Linking.getInitialURL();
+      if (!cancelled && url) await handleAuthUrl(url);
+    })();
+
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      void handleAuthUrl(url);
+    });
+    return () => {
+      cancelled = true;
+      subscription.remove();
+    };
+  }, [initialize, handleAuthUrl]);
 
   useEffect(() => {
     if (status === 'signedIn') {

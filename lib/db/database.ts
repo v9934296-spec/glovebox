@@ -4,6 +4,7 @@ import { create } from 'zustand';
 let db: SQLiteDatabase | null = null;
 
 const SCHEMA_VERSION = 3;
+const LOCAL_DATA_OWNER_KEY = 'localDataOwnerUserId';
 
 const MIGRATIONS: Record<number, string> = {
   1: `
@@ -110,6 +111,37 @@ function migrate(database: SQLiteDatabase) {
       database.execSync(`PRAGMA user_version = ${next}`);
     });
     version = next;
+  }
+}
+
+/**
+ * Bind the local SQLite dataset to the first signed-in account that claims it.
+ * This lets a local-only user migrate into an account, but prevents a later
+ * different account from uploading or viewing the previous account's data.
+ */
+export function assertLocalOnlyAccess() {
+  const owner = getDb().getFirstSync<{ value: string }>('SELECT value FROM sync_state WHERE key = ?', [
+    LOCAL_DATA_OWNER_KEY,
+  ])?.value;
+  if (owner) {
+    throw new Error('This device contains data linked to an account. Sign in to that account or erase local data in Settings.');
+  }
+}
+
+export function claimLocalDataForUser(userId: string) {
+  const database = getDb();
+  const current = database.getFirstSync<{ value: string }>('SELECT value FROM sync_state WHERE key = ?', [
+    LOCAL_DATA_OWNER_KEY,
+  ])?.value;
+
+  if (current && current !== userId) {
+    throw new Error(
+      'This device contains Glovebox data linked to another account. Erase local data in Settings before signing in with a different account.',
+    );
+  }
+
+  if (!current) {
+    database.runSync('INSERT INTO sync_state (key, value) VALUES (?, ?)', [LOCAL_DATA_OWNER_KEY, userId]);
   }
 }
 
