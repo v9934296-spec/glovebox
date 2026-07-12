@@ -2,10 +2,11 @@ import * as Network from 'expo-network';
 import { AppState } from 'react-native';
 import { create } from 'zustand';
 import { currentUserId } from '../auth/session';
-import { bumpDataVersion, getDb, nowIso } from '../db/database';
+import { bumpDataVersion, claimLocalDataForUser, getDb, nowIso } from '../db/database';
 import { isSupabaseConfigured, getSupabase } from '../supabase';
 import { ensureLocalMedia, uploadRowMedia } from './media';
-import { coalesceQueue, laterTimestamp, shouldApplyRemote } from './merge';
+import { parsePullCursor, postgrestLiteral, serializePullCursor } from './cursor';
+import { coalesceQueue, shouldApplyRemote } from './merge';
 import {
   clearQueueEntries,
   enqueueChange,
@@ -19,7 +20,6 @@ import {
 } from './queue';
 
 type LocalRow = Record<string, string | number | null>;
-
 /**
  * Per-table sync mapping. `columns` are identical local/cloud; media columns
  * differ (local file URI vs storage path) and are translated during push/pull.
@@ -83,6 +83,17 @@ function getLocalRow(table: SyncTable, rowId: string): LocalRow | null {
   return getDb().getFirstSync<LocalRow>(`SELECT * FROM ${table} WHERE id = ?`, [rowId]);
 }
 
+function applyRemoteRow(table: SyncTable, values: LocalRow) {
+  const cols = Object.keys(values);
+  const updateCols = cols.filter((col) => col !== 'id');
+  const assignments = updateCols.map((col) => `${col} = excluded.${col}`).join(', ');
+  getDb().runSync(
+    `INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')}) ` +
+      `ON CONFLICT(id) DO UPDATE SET ${assignments}`,
+    cols.map((col) => values[col] ?? null),
+  );
+}
+
 /**
  * First sync for a user: everything already on the device (including rows
  * created before Phase 2 or while signed out) gets queued for push.
@@ -123,8 +134,24 @@ async function pushQueue(userId: string) {
     }
 
     if (payloads.length > 0) {
-      const { error } = await supabase.from(table).upsert(payloads);
+      const sentUpdatedAt = new Map(
+        payloads.map((payload) => [String(payload.id), String(payload.updated_at)]),
+      );
+      const { data, error } = await supabase.from(table).upsert(payloads).select('id, updated_at');
       if (error) throw new Error(`push ${table} failed: ${error.message}`);
+
+      // The database owns authoritative modification time. Only acknowledge the
+      // exact local version we sent so an edit made during the request is never
+      // overwritten by an older acknowledgement.
+      for (const ack of (data ?? []) as Array<{ id: string; updated_at: string }>) {
+        const sent = sentUpdatedAt.get(ack.id);
+        if (!sent) continue;
+        getDb().runSync(`UPDATE ${table} SET updated_at = ? WHERE id = ? AND updated_at = ?`, [
+          ack.updated_at,
+          ack.id,
+          sent,
+        ]);
+      }
     }
     for (const change of tableChanges) {
       clearQueueEntries(change.maxQueueId, table, change.rowId);
@@ -139,16 +166,28 @@ async function pullChanges(userId: string) {
 
   for (const table of SYNC_TABLES) {
     const config = TABLE_CONFIG[table];
-    const cursorKey = `cursor:${userId}:${table}`;
-    let cursor = getSyncState(cursorKey) ?? '1970-01-01T00:00:00Z';
+    // v2 intentionally replays from epoch once, repairing rows that the old
+    // timestamp-only cursor could have skipped when timestamps were identical.
+    const cursorKey = `cursor:v2:${userId}:${table}`;
+    let cursor = parsePullCursor(getSyncState(cursorKey));
 
     for (;;) {
-      const { data, error } = await supabase
+      let query = supabase
         .from(table)
         .select('*')
-        .gt('updated_at', cursor)
+        .eq('user_id', userId)
         .order('updated_at', { ascending: true })
+        .order('id', { ascending: true })
         .limit(PAGE_SIZE);
+
+      query = cursor.id
+        ? query.or(
+            `updated_at.gt.${postgrestLiteral(cursor.updatedAt)},` +
+              `and(updated_at.eq.${postgrestLiteral(cursor.updatedAt)},id.gt.${postgrestLiteral(cursor.id)})`,
+          )
+        : query.gt('updated_at', cursor.updatedAt);
+
+      const { data, error } = await query;
       if (error) throw new Error(`pull ${table} failed: ${error.message}`);
       const rows = (data ?? []) as LocalRow[];
       if (rows.length === 0) break;
@@ -161,17 +200,19 @@ async function pullChanges(userId: string) {
 
       for (const remote of rows) {
         const id = remote.id as string;
+        const remoteUpdatedAt = remote.updated_at as string;
         const local = getLocalRow(table, id);
         const apply = shouldApplyRemote({
           localUpdatedAt: (local?.updated_at as string | null) ?? null,
-          remoteUpdatedAt: remote.updated_at as string,
+          remoteUpdatedAt,
           hasPendingLocalChange: pendingIds.has(id),
         });
-        cursor = laterTimestamp(cursor, remote.updated_at as string);
+
+        cursor = { updatedAt: remoteUpdatedAt, id };
         if (!apply) continue;
 
         const values: LocalRow = {};
-        for (const col of TABLE_CONFIG[table].columns) {
+        for (const col of config.columns) {
           values[col] = (remote[col] as string | number | null) ?? null;
         }
         if (config.mediaLocalColumn && config.mediaCloudColumn) {
@@ -181,15 +222,11 @@ async function pullChanges(userId: string) {
             remote.deleted_at === null ? await ensureLocalMedia(remotePath, existingLocal) : existingLocal;
         }
 
-        const cols = Object.keys(values);
-        getDb().runSync(
-          `INSERT OR REPLACE INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
-          cols.map((c) => values[c] ?? null),
-        );
+        applyRemoteRow(table, values);
         applied += 1;
       }
 
-      setSyncState(cursorKey, cursor);
+      setSyncState(cursorKey, serializePullCursor(cursor));
       if (rows.length < PAGE_SIZE) break;
     }
   }
@@ -200,7 +237,7 @@ async function pullChanges(userId: string) {
 let syncing = false;
 let syncAgainRequested = false;
 
-/** Full sync pass: backfill (first run per user) → push queue → pull changes. */
+/** Full sync pass: account guard → backfill → push queue → pull changes. */
 export async function syncNow(): Promise<void> {
   if (!isSupabaseConfigured) return;
   const userId = currentUserId();
@@ -212,6 +249,7 @@ export async function syncNow(): Promise<void> {
   syncing = true;
   useSyncStatus.setState({ syncing: true, error: null });
   try {
+    claimLocalDataForUser(userId);
     const network = await Network.getNetworkStateAsync();
     if (network.isConnected === false) return;
     backfillIfNeeded(userId);

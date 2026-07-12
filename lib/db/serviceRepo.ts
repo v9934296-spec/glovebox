@@ -54,34 +54,40 @@ export function listAllServiceRecords(): ServiceRecord[] {
 export function createServiceRecord(input: NewServiceRecord): ServiceRecord {
   const id = newId();
   const ts = nowIso();
-  getDb().runSync(
-    `INSERT INTO service_records (id, vehicle_id, service_type, date, mileage, cost, shop_name,
-       notes, receipt_uri, next_due_date, next_due_mileage, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id,
-      input.vehicleId,
-      input.serviceType,
-      input.date,
-      input.mileage,
-      input.cost,
-      input.shopName,
-      input.notes,
-      input.receiptUri,
-      input.nextDueDate,
-      input.nextDueMileage,
-      ts,
-      ts,
-    ],
-  );
-  enqueueChange('service_records', id);
+  const db = getDb();
+  db.withTransactionSync(() => {
+    db.runSync(
+      `INSERT INTO service_records (id, vehicle_id, service_type, date, mileage, cost, shop_name,
+         notes, receipt_uri, next_due_date, next_due_mileage, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        input.vehicleId,
+        input.serviceType,
+        input.date,
+        input.mileage,
+        input.cost,
+        input.shopName,
+        input.notes,
+        input.receiptUri,
+        input.nextDueDate,
+        input.nextDueMileage,
+        ts,
+        ts,
+      ],
+    );
+    enqueueChange('service_records', id);
+  });
   bumpDataVersion();
   return { ...input, id, createdAt: ts, updatedAt: ts };
 }
 
 export function deleteServiceRecord(id: string) {
   const ts = nowIso();
-  getDb().runSync('UPDATE service_records SET deleted_at = ?, updated_at = ? WHERE id = ?', [ts, ts, id]);
-  enqueueChange('service_records', id);
+  const db = getDb();
+  db.withTransactionSync(() => {
+    db.runSync('UPDATE service_records SET deleted_at = ?, updated_at = ? WHERE id = ?', [ts, ts, id]);
+    enqueueChange('service_records', id);
+  });
   bumpDataVersion();
 }

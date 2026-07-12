@@ -59,26 +59,29 @@ export function listReminders(filter?: { vehicleId?: string; status?: Reminder['
 export function createReminder(input: NewReminder): Reminder {
   const id = newId();
   const ts = nowIso();
-  getDb().runSync(
-    `INSERT INTO reminders (id, vehicle_id, title, category, due_date, due_mileage,
-       recurrence_type, recurrence_interval_months, recurrence_interval_miles,
-       status, completed_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', NULL, ?, ?)`,
-    [
-      id,
-      input.vehicleId,
-      input.title,
-      input.category,
-      input.dueDate,
-      input.dueMileage,
-      input.recurrenceType,
-      input.recurrenceIntervalMonths,
-      input.recurrenceIntervalMiles,
-      ts,
-      ts,
-    ],
-  );
-  enqueueChange('reminders', id);
+  const db = getDb();
+  db.withTransactionSync(() => {
+    db.runSync(
+      `INSERT INTO reminders (id, vehicle_id, title, category, due_date, due_mileage,
+         recurrence_type, recurrence_interval_months, recurrence_interval_miles,
+         status, completed_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', NULL, ?, ?)`,
+      [
+        id,
+        input.vehicleId,
+        input.title,
+        input.category,
+        input.dueDate,
+        input.dueMileage,
+        input.recurrenceType,
+        input.recurrenceIntervalMonths,
+        input.recurrenceIntervalMiles,
+        ts,
+        ts,
+      ],
+    );
+    enqueueChange('reminders', id);
+  });
   bumpDataVersion();
   return { ...input, id, status: 'active', completedAt: null, createdAt: ts, updatedAt: ts };
 }
@@ -90,24 +93,30 @@ export function createReminder(input: NewReminder): Reminder {
 export function completeReminder(reminder: Reminder, currentMileage: number) {
   const ts = nowIso();
   const next = nextOccurrence(reminder, { date: todayIso(), mileage: currentMileage });
-  if (next) {
-    getDb().runSync(
-      'UPDATE reminders SET due_date = ?, due_mileage = ?, updated_at = ? WHERE id = ?',
-      [next.dueDate, next.dueMileage, ts, reminder.id],
-    );
-  } else {
-    getDb().runSync(
-      "UPDATE reminders SET status = 'completed', completed_at = ?, updated_at = ? WHERE id = ?",
-      [ts, ts, reminder.id],
-    );
-  }
-  enqueueChange('reminders', reminder.id);
+  const db = getDb();
+  db.withTransactionSync(() => {
+    if (next) {
+      db.runSync(
+        'UPDATE reminders SET due_date = ?, due_mileage = ?, updated_at = ? WHERE id = ?',
+        [next.dueDate, next.dueMileage, ts, reminder.id],
+      );
+    } else {
+      db.runSync(
+        "UPDATE reminders SET status = 'completed', completed_at = ?, updated_at = ? WHERE id = ?",
+        [ts, ts, reminder.id],
+      );
+    }
+    enqueueChange('reminders', reminder.id);
+  });
   bumpDataVersion();
 }
 
 export function deleteReminder(id: string) {
   const ts = nowIso();
-  getDb().runSync('UPDATE reminders SET deleted_at = ?, updated_at = ? WHERE id = ?', [ts, ts, id]);
-  enqueueChange('reminders', id);
+  const db = getDb();
+  db.withTransactionSync(() => {
+    db.runSync('UPDATE reminders SET deleted_at = ?, updated_at = ? WHERE id = ?', [ts, ts, id]);
+    enqueueChange('reminders', id);
+  });
   bumpDataVersion();
 }
