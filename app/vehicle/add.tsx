@@ -11,6 +11,8 @@ import { canAddVehicle } from '@/lib/monetization/entitlements';
 import { useIsPro } from '@/lib/monetization/purchases';
 import { palette, radius, spacing, typography } from '@/lib/theme';
 import { validateVin } from '@/lib/domain/vin';
+import { isValidIsoDate } from '@/lib/domain/date';
+import { persistLocalMedia } from '@/lib/media/local';
 
 type FormValues = {
   nickname: string;
@@ -59,12 +61,11 @@ export default function AddVehicleScreen() {
     if (!result.canceled && uri) setPhotoUri(uri);
   }
 
-  const onSubmit = handleSubmit((values) => {
+  const onSubmit = handleSubmit(async (values) => {
     const vinInput = values.vin.trim();
     const vinCheck = vinInput ? validateVin(vinInput) : null;
-    // Normalize a well-formed VIN; otherwise keep the raw entry (rare — react-hook-form
-    // already blocks submit on a validation error) rather than silently dropping it.
     const vin = vinCheck?.valid ? vinCheck.vin : vinInput || null;
+    const savedPhotoUri = await persistLocalMedia(photoUri, 'vehicles');
     createVehicle({
       nickname: values.nickname.trim(),
       make: values.make.trim(),
@@ -76,7 +77,7 @@ export default function AddVehicleScreen() {
       mileage: Number(values.mileage.replace(/[^\d]/g, '') || 0),
       purchaseDate: values.purchaseDate.trim() || null,
       purchasePrice: values.purchasePrice ? Number(values.purchasePrice.replace(/[^\d.]/g, '')) : null,
-      photoUri,
+      photoUri: savedPhotoUri,
       vinDecodedAt: null,
       vinDecoded: null,
       recallCheckedAt: null,
@@ -256,7 +257,7 @@ export default function AddVehicleScreen() {
               control={control}
               name="purchaseDate"
               rules={{
-                validate: (v) => !v || /^\d{4}-\d{2}-\d{2}$/.test(v) || 'Use YYYY-MM-DD',
+                validate: (v) => !v || isValidIsoDate(v) || 'Use a real date as YYYY-MM-DD',
               }}
               render={({ field, fieldState }) => (
                 <Field

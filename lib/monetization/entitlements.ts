@@ -1,56 +1,14 @@
-/**
- * Pure entitlement logic for Glovebox Pro (unit tested, no RN imports).
- * The free tier keeps the core tracker useful; Pro removes limits and
- * unlocks power features. All gating decisions flow through here so the
- * rules live in one place.
- */
-
-export const PRO_ENTITLEMENT_ID = 'pro';
-
-export const FREE_LIMITS = {
-  /** Vehicles a free user can keep in the garage. */
-  maxVehicles: 2,
-} as const;
-
-export type GateResult = { allowed: true } | { allowed: false; reason: string };
-
-export function canAddVehicle(vehicleCount: number, isPro: boolean): GateResult {
-  if (isPro || vehicleCount < FREE_LIMITS.maxVehicles) return { allowed: true };
-  return {
-    allowed: false,
-    reason: `The free plan is limited to ${FREE_LIMITS.maxVehicles} vehicles. Upgrade to Glovebox Pro for an unlimited garage.`,
-  };
-}
-
-export function canAttachReceipt(isPro: boolean): GateResult {
-  if (isPro) return { allowed: true };
-  return {
-    allowed: false,
-    reason: 'Receipt photos are a Glovebox Pro feature. Upgrade to keep every receipt with its service record.',
-  };
-}
-
-export function canUseAi(isPro: boolean): GateResult {
-  if (isPro) return { allowed: true };
-  return {
-    allowed: false,
-    reason: 'AI tools — receipt scanning, repair explanations, and price checks — are a Glovebox Pro feature.',
-  };
-}
-
-export function canExportReport(isPro: boolean): GateResult {
-  if (isPro) return { allowed: true };
-  return {
-    allowed: false,
-    reason: 'The PDF vehicle history report is a Glovebox Pro feature. Upgrade to export a shareable service record.',
-  };
-}
-
-/** Marketing copy shown on the paywall and in Settings. */
-export const PRO_FEATURES: ReadonlyArray<{ title: string; detail: string }> = [
-  { title: 'Unlimited garage', detail: `Track more than ${FREE_LIMITS.maxVehicles} vehicles` },
-  { title: 'Receipt photos', detail: 'Attach receipts to every service record' },
-  { title: 'AI receipt scanner', detail: 'Snap a receipt and the service record fills itself in' },
-  { title: 'AI repair assistant', detail: 'Plain-language explanations and fair-price checks for any repair' },
-  { title: 'PDF vehicle history', detail: 'Export a polished service report — great when selling' },
+export const PRO_ENTITLEMENT_ID='pro';
+export const FREE_LIMITS={maxVehicles:3} as const;
+export type GateResult={allowed:true}|{allowed:false;reason:string};
+export function canAddVehicle(count:number,isPro:boolean):GateResult{if(isPro||count<FREE_LIMITS.maxVehicles)return{allowed:true};return{allowed:false,reason:`The free plan includes ${FREE_LIMITS.maxVehicles} vehicles. Pro unlocks an unlimited garage plus the receipt vault, AI repair/quote tools, and export reports.`};}
+export function canAttachReceipt(isPro:boolean):GateResult{return isPro?{allowed:true}:{allowed:false,reason:'The receipt vault is Pro. Your maintenance log, fuel log, reminders, and Health Score stay free.'};}
+export function canUseAi(isPro:boolean):GateResult{return isPro?{allowed:true}:{allowed:false,reason:'Repair explanations, quote checks, and AI receipt scanning are Pro tools. Your core garage still works offline for free.'};}
+export function canExportReport(isPro:boolean):GateResult{return isPro?{allowed:true}:{allowed:false,reason:'Shareable PDF ownership reports are a Pro feature.'};}
+export const PRO_FEATURES:ReadonlyArray<{title:string;detail:string}>=[
+ {title:'Unlimited garage',detail:`Go beyond the ${FREE_LIMITS.maxVehicles} free vehicles`},
+ {title:'Receipt vault + AI scan',detail:'Keep service proof and turn receipt photos into structured records'},
+ {title:'Repair explainer',detail:'Understand what a shop is recommending before you approve work'},
+ {title:'Quote check',detail:'Get a practical price sanity-check with questions to ask the shop'},
+ {title:'Ownership report',detail:'Export a polished maintenance, fuel, and cost history when you need it'},
 ];

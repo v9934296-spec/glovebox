@@ -5,6 +5,7 @@
  * sloppy model answer degrades to fewer prefilled fields, never a crash.
  */
 import { SERVICE_TYPES } from '../domain/serviceTypes';
+import { isValidIsoDate } from '../domain/date';
 
 export class AiParseError extends Error {
   constructor() {
@@ -22,7 +23,6 @@ function asString(v: unknown): string | null {
   return typeof v === 'string' && v.trim() !== '' ? v.trim() : null;
 }
 
-/** Accepts numbers or numeric strings like "82.50" / "$1,234.56". */
 function asNumber(v: unknown): number | null {
   if (typeof v === 'number' && Number.isFinite(v)) return v;
   if (typeof v === 'string') {
@@ -39,7 +39,7 @@ function asInt(v: unknown): number | null {
 
 function asIsoDate(v: unknown): string | null {
   const s = asString(v);
-  return s != null && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+  return s != null && isValidIsoDate(s) ? s : null;
 }
 
 function asStringArray(v: unknown, max: number): string[] {
@@ -52,10 +52,7 @@ function asEnum<T extends string>(v: unknown, values: readonly T[], fallback: T)
   return (values as readonly string[]).includes(s ?? '') ? (s as T) : fallback;
 }
 
-// --- Receipt scan ---
-
 export type ReceiptScan = {
-  /** A valid id from the service catalog, or null when the model was unsure. */
   serviceType: string | null;
   date: string | null;
   cost: number | null;
@@ -79,12 +76,9 @@ export function parseReceiptScan(raw: unknown): ReceiptScan {
   };
 }
 
-/** True when a scan found nothing usable (so the UI can say so instead of silently doing nothing). */
 export function isEmptyScan(scan: ReceiptScan): boolean {
   return Object.values(scan).every((v) => v === null);
 }
-
-// --- Repair explanation ---
 
 export const urgencies = ['routine', 'soon', 'urgent'] as const;
 export type Urgency = (typeof urgencies)[number];
@@ -105,7 +99,6 @@ export function parseRepairExplanation(raw: unknown): RepairExplanation {
   const r = asRecord(raw);
   const summary = asString(r.summary);
   const whatItIs = asString(r.whatItIs);
-  // Without the actual explanation the card would be empty — treat as unreadable.
   if (summary === null && whatItIs === null) throw new AiParseError();
   return {
     summary: summary ?? whatItIs!,
@@ -116,8 +109,6 @@ export function parseRepairExplanation(raw: unknown): RepairExplanation {
     questionsForShop: asStringArray(r.questionsForShop, 4),
   };
 }
-
-// --- Cost check ---
 
 export const costVerdicts = ['low', 'fair', 'high'] as const;
 export type CostVerdict = (typeof costVerdicts)[number];

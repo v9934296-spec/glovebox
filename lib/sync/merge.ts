@@ -1,55 +1,10 @@
-/**
- * Pure sync logic — no Supabase or SQLite imports so it stays unit-testable.
- * Conflict policy: last-write-wins on updated_at; server is source of truth
- * after sync, but unpushed local edits that are newer than the server row win.
- */
-import type { QueueEntry, SyncTable } from './queue';
-
-export type CoalescedChange = { table: SyncTable; rowId: string; maxQueueId: number };
-
-/**
- * Collapse duplicate queue entries per row (every entry is "push current row
- * state", so only the newest matters). Preserves first-seen order, which keeps
- * parents (vehicles) ahead of children for the same batch.
- */
-export function coalesceQueue(entries: QueueEntry[]): CoalescedChange[] {
-  const byKey = new Map<string, CoalescedChange>();
-  for (const e of entries) {
-    const key = `${e.table_name}:${e.row_id}`;
-    const existing = byKey.get(key);
-    if (existing) {
-      existing.maxQueueId = Math.max(existing.maxQueueId, e.id);
-    } else {
-      byKey.set(key, { table: e.table_name, rowId: e.row_id, maxQueueId: e.id });
-    }
-  }
-  return [...byKey.values()];
-}
-
-/**
- * Decide whether a pulled remote row should overwrite the local row.
- * Timestamps are compared via Date.parse because SQLite stores
- * "...Z" ISO strings while Postgres returns "+00:00" offsets.
- */
-export function shouldApplyRemote(args: {
-  localUpdatedAt: string | null;
-  remoteUpdatedAt: string;
-  hasPendingLocalChange: boolean;
-}): boolean {
-  if (args.localUpdatedAt === null) return true;
-  const local = Date.parse(args.localUpdatedAt);
-  const remote = Date.parse(args.remoteUpdatedAt);
-  if (Number.isNaN(local)) return true;
-  if (Number.isNaN(remote)) return false;
-  if (args.hasPendingLocalChange) {
-    // Keep the local edit unless the server row is strictly newer.
-    return remote > local;
-  }
-  return remote >= local;
-}
-
-/** Max of two ISO timestamps (used to advance the pull cursor). */
-export function laterTimestamp(a: string | null, b: string): string {
-  if (a === null) return b;
-  return Date.parse(b) > Date.parse(a) ? b : a;
-}
+import type { QueueEntry,SyncTable } from './queue';
+export type CoalescedChange={table:SyncTable;rowId:string;maxQueueId:number};
+export function coalesceQueue(entries:QueueEntry[]):CoalescedChange[]{const byKey=new Map<string,CoalescedChange>();for(const e of entries){const key=`${e.table_name}:${e.row_id}`;const x=byKey.get(key);if(x)x.maxQueueId=Math.max(x.maxQueueId,e.id);else byKey.set(key,{table:e.table_name,rowId:e.row_id,maxQueueId:e.id});}return[...byKey.values()];}
+export function shouldApplyRemote(args:{localUpdatedAt:string|null;remoteUpdatedAt:string;hasPendingLocalChange:boolean}):boolean{if(args.localUpdatedAt===null)return true;const local=Date.parse(args.localUpdatedAt),remote=Date.parse(args.remoteUpdatedAt);if(Number.isNaN(local))return true;if(Number.isNaN(remote))return false;if(args.hasPendingLocalChange)return remote>local;return remote>=local;}
+export function laterTimestamp(a:string|null,b:string):string{if(a===null)return b;const ams=Date.parse(a),bms=Date.parse(b);if(Number.isNaN(ams))return b;if(Number.isNaN(bms))return a;return bms>ams?b:a;}
+export type SyncCursor={updatedAt:string;id:string};
+export const INITIAL_CURSOR:SyncCursor={updatedAt:'1970-01-01T00:00:00.000Z',id:''};
+export function parseCursor(raw:string|null):SyncCursor{if(!raw)return INITIAL_CURSOR;try{const parsed=JSON.parse(raw) as Partial<SyncCursor>;if(typeof parsed.updatedAt==='string'&&typeof parsed.id==='string')return{updatedAt:parsed.updatedAt,id:parsed.id};}catch{if(!Number.isNaN(Date.parse(raw)))return{updatedAt:raw,id:''};}return INITIAL_CURSOR;}
+export function cursorAfter(cursor:SyncCursor,row:{updated_at:string;id:string}):SyncCursor{const a=Date.parse(cursor.updatedAt),b=Date.parse(row.updated_at);if(Number.isNaN(b))return cursor;if(b>a)return{updatedAt:row.updated_at,id:row.id};if(b===a&&row.id>cursor.id)return{updatedAt:row.updated_at,id:row.id};return cursor;}
+export function localUpsertSql(table:string,columns:string[]):string{const update=columns.filter(c=>c!=='id'&&c!=='workspace_id').map(c=>`${c}=excluded.${c}`).join(',');return `INSERT INTO ${table} (${columns.join(',')}) VALUES (${columns.map(()=>'?').join(',')}) ON CONFLICT(id) DO UPDATE SET ${update}`;}

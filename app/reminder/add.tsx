@@ -5,6 +5,7 @@ import { Button, Chip, EmptyState, Field, SectionHeader } from '@/components/ui'
 import { useVehicles } from '@/lib/db/hooks';
 import { createReminder } from '@/lib/db/reminderRepo';
 import { serviceTypeDef, SERVICE_TYPES } from '@/lib/domain/serviceTypes';
+import { isValidIsoDate } from '@/lib/domain/date';
 import type { RecurrenceType } from '@/lib/domain/types';
 import { palette, spacing, typography } from '@/lib/theme';
 
@@ -46,8 +47,8 @@ export default function AddReminderScreen() {
       setError('Title is required');
       return;
     }
-    if (dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
-      setError('Due date must be YYYY-MM-DD');
+    if (dueDate && !isValidIsoDate(dueDate)) {
+      setError('Due date must be a real YYYY-MM-DD date');
       return;
     }
     if (!dueDate && !dueMileage) {

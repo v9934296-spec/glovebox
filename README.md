@@ -1,228 +1,160 @@
 # Glovebox
 
-Your car's memory, maintenance plan, and repair history in one app.
+**Your car's private memory — maintenance, fuel, reminders, and repair help that still works offline.**
 
-Glovebox is a mobile-first vehicle ownership tracker: maintenance log, smart reminders,
-ownership-cost dashboard, and a 0–100 vehicle health score. The app is **offline-first** —
-SQLite on the device is the source of truth for the UI, and an optional Supabase account
-adds backup and multi-device sync (Phase 2). No account required: "Continue without
-account" keeps everything local.
+Glovebox is an offline-first vehicle ownership app. SQLite is the source of truth for the UI, so the garage, service history, fuel log, reminders, ownership costs, and Health Score remain useful without an account or connection. An optional Supabase account adds isolated backup/multi-device sync. Glovebox Pro adds the receipt vault, AI receipt extraction, repair explanations, quote checks, unlimited vehicles, and ownership-history PDF exports.
+
+## What ships
+
+- **Garage** — up to 3 vehicles free, unlimited with Pro; photos, VIN, mileage, purchase details, edit/delete.
+- **Maintenance history** — service type, mileage, cost, shop, notes, next-due data, edit/delete.
+- **Fuel log** — gallons, total paid, price-per-gallon, station, odometer, full/partial fill, edit/delete.
+- **Local maintenance notifications** — date reminders plus mileage-due notices when the recorded odometer reaches the target.
+- **Ownership costs** — month/year/lifetime service + fuel totals and cost-per-mile estimates.
+- **Health Score** — a 0–100 maintenance-record heuristic based on overdue/due-soon work and history completeness; it is not a mechanical diagnosis and does not punish a car for age, mileage, or an expensive repair alone.
+- **VIN + recall campaigns** — VIN validation/decoding plus NHTSA year/make/model recall-campaign lookup. Glovebox deliberately does not label model-level campaign results as VIN-specific “open recalls.”
+- **AI Pro tools** — receipt extraction, repair explanations, and quote sanity checks with explicit consent, server entitlement enforcement, quotas, timeouts, and response parsing.
+- **Ownership report** — on-device PDF with vehicle details, maintenance, fuel, and cost history.
+- **Account controls** — password recovery, explicit local-only → account import decision, sign-out isolation, and in-app permanent account deletion.
 
 ## Stack
 
-- Expo (SDK 55) + React Native + TypeScript (strict)
-- Expo Router (file-based navigation, typed routes, `Stack.Protected` auth gating)
-- expo-sqlite for local persistence (schema versioned via `PRAGMA user_version`)
-- Supabase (auth, Postgres with RLS, Storage, Edge Functions) for accounts, cloud sync, and AI — optional
-- RevenueCat (react-native-purchases) for Glovebox Pro subscriptions — optional
-- Zustand for cross-screen data invalidation and auth/sync/entitlement state
-- React Hook Form + Zod for forms/validation
-- Jest (jest-expo) for unit tests
+- Expo SDK 55 + React Native + strict TypeScript
+- Expo Router
+- `expo-sqlite` / WAL for local persistence
+- Supabase Auth, Postgres + RLS, Storage, Edge Functions
+- RevenueCat for Glovebox Pro
+- Zustand for app/auth/sync/entitlement state
+- React Hook Form + Zod
+- Jest + ESLint + Expo Doctor in CI
 
-## Project layout
+## Architecture
 
-```
-app/                    # Expo Router routes
-  (auth)/               #   sign-in, sign-up, forgot-password
-  (tabs)/               #   Dashboard, Garage, Reminders, Settings
-  vehicle/              #   add (modal), [id] detail
-  service/add.tsx       #   log-service modal
-  reminder/add.tsx      #   new-reminder modal
-  ai/assistant.tsx      #   AI repair explainer + price check modal
-  paywall.tsx           #   Glovebox Pro paywall modal
-components/ui.tsx       # design-system primitives (Button, Card, Field, badges…)
-lib/theme.ts            # design tokens — all colors/spacing/type come from here
-lib/domain/             # pure business logic (unit tested, no RN imports)
-  due.ts                #   due-state machine, recurrence roll-forward
-  healthScore.ts        #   0–100 health heuristic
-  expenses.ts           #   month/year/lifetime/cost-per-mile aggregation
-  serviceTypes.ts       #   service catalog + default intervals
-  vin.ts                #   VIN normalize/validate + decode/recall parsing (unit tested)
-lib/ai/                 # Phase 4 AI features
-  client.ts             #   calls the `ai` Edge Function; availability gating
-  parse.ts              #   pure validation of AI responses (unit tested)
-lib/vin/                # Phase 6 VIN decode + recall checks
-  client.ts             #   calls the `vin` Edge Function; availability gating
-lib/db/                 # SQLite: migrations, repos, React hooks
-lib/auth/session.ts     # Supabase auth store (sign in/up/out, local-only mode)
-lib/monetization/       # Glovebox Pro
-  entitlements.ts       #   pure gating rules: free limits, Pro features (unit tested)
-  purchases.ts          #   RevenueCat wrapper: entitlement store, purchase/restore
-lib/report/             # Phase 5 PDF vehicle history report
-  html.ts               #   pure report HTML builder (unit tested)
-  export.ts             #   expo-print PDF generation + share sheet
-lib/sync/               # offline-first sync
-  queue.ts              #   sync_queue writes + sync_state cursors
-  merge.ts              #   pure LWW conflict logic (unit tested)
-  engine.ts             #   push/pull passes, debounce + foreground triggers
-  media.ts              #   photo/receipt upload & download (Supabase Storage)
-lib/supabase.ts         # client init; app runs local-only without env config
-supabase/migrations/    # cloud schema SQL (run in the Supabase dashboard)
-supabase/functions/ai/  # Edge Function proxying OpenAI (holds the API key)
-supabase/functions/vin/ # Edge Function proxying NHTSA vPIC decode + recalls
+```text
+UI
+ ↓
+SQLite workspace (source of truth)
+ ↓
+sync queue scoped to active workspace
+ ↓
+PULL newer server state
+ ↓
+conditional server RPC PUSH (stale writes rejected)
+ ↓
+PULL reconciliation
+ ↓
+Supabase Postgres + private Storage
 ```
 
-## Development
+Important sync guarantees:
+
+- Local data is partitioned by workspace (`local` or `user:<supabase-user-id>`), so signing into another account cannot silently adopt the previous account's cache.
+- Moving a local-only garage into an account requires an explicit user choice.
+- Cloud sync uses soft deletes and server-conditional LWW writes. A stale device cannot overwrite a newer cloud row simply because it reconnects later.
+- Pull pagination uses a composite `(updated_at, id)` cursor to avoid skipping rows that share a timestamp.
+- SQLite pull writes use true `ON CONFLICT ... DO UPDATE`; `INSERT OR REPLACE` is forbidden because replacing a vehicle could fire cascading deletes on local child records.
+- Service/receipt media uses app-owned local files and versioned cloud object paths; stale media uploads cannot overwrite the object selected by a newer row version.
+- Cloud child rows use owner-aware foreign keys back to the same user's vehicle.
+
+## Repository layout
+
+```text
+app/
+  (auth)/                 sign in/up, password recovery
+  (tabs)/                 Dashboard, Garage, Reminders, Settings
+  vehicle/                add/edit/detail
+  service/                add/edit
+  fuel/                   add/edit
+  reminder/               add/edit
+  ai/assistant.tsx
+  legal/                   in-app Privacy + Terms
+  paywall.tsx
+lib/
+  ai/                      client, consent, response parsing
+  auth/                    Supabase session + workspace transitions
+  db/                      SQLite migrations, repos, hooks
+  domain/                  pure business rules
+  media/                   app-owned local media
+  monetization/            free/Pro gates + RevenueCat wrapper
+  notifications/           local maintenance scheduling
+  report/                  PDF export
+  sync/                    queue, merge/cursors, engine, cloud media
+  vin/                     VIN/recall client
+supabase/
+  config.toml              Edge Function JWT policy
+  migrations/              cloud schema + hardening RPCs
+  functions/
+    ai/                    authenticated Pro AI proxy
+    vin/                   public, rate-limited NHTSA proxy
+    delete-account/        authenticated account/data deletion
+```
+
+## Development / release verification
+
+Use Node 20.19.x for Expo SDK 55.
 
 ```bash
-pnpm install
-pnpm start          # Expo dev server (press i / a for simulator)
-pnpm typecheck      # tsc --noEmit
-pnpm test           # jest unit tests
+npm install --legacy-peer-deps
+npm run typecheck
+npm run lint
+npm test -- --runInBand
+npm run audit:release
+npx expo install --check
+npx expo-doctor
 ```
 
-Without a `.env` the app boots straight into local-only mode (no auth screens).
+`npm run verify` runs the source checks together. `.github/workflows/verify.yml` repeats them for pull requests.
 
-## Supabase setup (cloud sync)
+## Supabase setup
 
-1. Create a free project at [supabase.com](https://supabase.com).
-2. Open the project's **SQL Editor** and run the migrations in
-   [supabase/migrations](supabase/migrations) in order:
-   [0001_init.sql](supabase/migrations/0001_init.sql) creates the `vehicles`,
-   `service_records`, and `reminders` tables with row-level security plus the
-   private `glovebox-media` storage bucket; [0002_vin_recalls.sql](supabase/migrations/0002_vin_recalls.sql)
-   adds the VIN decode/recall check columns to `vehicles` (Phase 6).
-3. Copy `.env.example` to `.env` and fill in **Project Settings → API**:
+Run migrations in order:
 
-   ```bash
-   EXPO_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
-   EXPO_PUBLIC_SUPABASE_ANON_KEY=<anon public key>
-   ```
+1. `0001_init.sql`
+2. `0002_vin_recalls.sql`
+3. `0003_hardening.sql`
 
-4. Restart the dev server. You'll see the sign-in screen; create an account or
-   tap "Continue without account".
+`0003_hardening.sql` adds fuel entries, owner-aware foreign keys, defensive constraints, conflict-safe sync RPCs, and server-side AI/VIN quota windows.
 
-### How sync works
-
-- Every local write also inserts into `sync_queue`; a debounced (3 s) push
-  upserts the row's current state to Postgres. Deletes are soft (`deleted_at`)
-  so they propagate to other devices.
-- Pull fetches rows with `updated_at` past a per-table cursor and applies them
-  with last-write-wins; unpushed local edits that are newer than the server row
-  are kept.
-- On first sync for an account, everything already on the device is queued, so
-  data created in local-only mode is adopted by the account.
-- Vehicle photos and receipts upload to the private `glovebox-media` bucket and
-  download on other devices via short-lived signed URLs.
-- Sync runs on sign-in, on app foreground, after writes, and via
-  Settings → Sync now. Offline? Changes wait in the queue.
-
-## Glovebox Pro (monetization)
-
-The free plan covers the core tracker; Pro removes limits:
-
-| | Free | Pro |
-|---|---|---|
-| Vehicles | 2 | Unlimited |
-| Maintenance log & reminders | Full | Full |
-| Receipt photos | — | Included |
-| AI receipt scanner & repair assistant | — | Included |
-| PDF vehicle history report | — | Included |
-
-All gating rules live in `lib/monetization/entitlements.ts`; screens call
-`canAddVehicle` / `canAttachReceipt` and send blocked users to the paywall.
-
-### RevenueCat setup
-
-1. Create a project at [revenuecat.com](https://www.revenuecat.com) and add your
-   iOS/Android apps (bundle id `app.glovebox.mobile`).
-2. Create an entitlement with identifier **`pro`**, attach your subscription
-   products to it, and add them to the **current offering** (the paywall lists
-   whatever packages the current offering contains).
-3. Add the public SDK keys to `.env`:
-
-   ```bash
-   EXPO_PUBLIC_REVENUECAT_IOS_KEY=appl_...
-   EXPO_PUBLIC_REVENUECAT_ANDROID_KEY=goog_...
-   ```
-
-Without keys (or in Expo Go/web, where the native module is unavailable) the
-app stays on the free tier and the paywall explains that purchases aren't
-available in that build. When a user signs in, the RevenueCat identity is
-linked to the Supabase user id so Pro follows the account across devices.
-Note that `react-native-purchases` is a native module: use a development build
-(`pnpm ios` / `pnpm android`), not Expo Go, to test purchases.
-
-## AI features (Phase 4)
-
-Three AI tools ship in Phase 4, all Pro-gated and all optional:
-
-- **Receipt scanner** — attach a receipt photo when logging service and tap
-  "Scan receipt": the service type, date, cost, shop, and mileage prefill from
-  the photo.
-- **Repair explainer** — from a vehicle's Overview tab (or the sparkles icon on
-  any service record), ask what a repair actually is: plain-language
-  explanation, urgency, DIY difficulty, and questions to ask the shop.
-- **Price check** — enter a quote and get a typical price range for that work
-  on that specific vehicle, plus a low/fair/high verdict.
-
-### AI setup
-
-The app never calls the model provider directly. A Supabase Edge Function
-([supabase/functions/ai](supabase/functions/ai/index.ts)) holds the OpenAI key
-and verifies the caller's Supabase JWT, so AI requires a signed-in account:
+Deploy functions with the checked-in auth policy in `supabase/config.toml`:
 
 ```bash
-supabase functions deploy ai            # from the repo root, after `supabase link`
-supabase secrets set OPENAI_API_KEY=sk-...
-supabase secrets set OPENAI_MODEL=gpt-4o-mini   # optional, this is the default
+supabase functions deploy ai
+supabase functions deploy vin
+supabase functions deploy delete-account
 ```
 
-Without the deployed function the AI buttons still render, but explain that AI
-isn't available in this build. Responses are validated in
-`lib/ai/parse.ts` — malformed model output degrades to fewer prefilled
-fields rather than crashes.
+Set server secrets:
 
-## PDF vehicle history report (Phase 5)
+```bash
+supabase secrets set OPENAI_API_KEY=sk_...
+supabase secrets set OPENAI_MODEL=gpt-4o-mini
+supabase secrets set REVENUECAT_SERVER_API_KEY=sk_...
+```
 
-From a vehicle's Overview tab, **Export PDF report** (Pro) renders a polished,
-print-styled report — vehicle identity and VIN, health score, cost-of-ownership
-summary, and the full service history with notes — and opens the system share
-sheet. Generation happens entirely on-device with `expo-print`, so it works
-offline and in local-only mode. The report markup is a pure function
-(`lib/report/html.ts`) with unit tests covering sorting, escaping of
-user-entered text, and empty-history handling.
+The `vin` function is intentionally public so local-only users can decode a VIN/check model-level recall campaigns; it is bounded by a hashed-client quota. `ai` and `delete-account` require a valid Supabase JWT.
 
-## VIN decode & recall checks (Phase 6)
+## Free vs Pro
 
-From a vehicle's Overview tab, **Decode VIN** and **Check recalls** call the
-[`vin`](supabase/functions/vin/index.ts) Edge Function, which proxies NHTSA's
-free, keyless vPIC (decode) and Recalls APIs — the app never calls NHTSA
-directly, so provider changes and rate limits stay isolated server-side. It's
-a core free utility (no Pro gate, no sign-in required beyond having Supabase
-configured).
+| Capability | Free | Pro |
+|---|---:|---:|
+| Vehicles | 3 | Unlimited |
+| Offline/local-only use | Yes | Yes |
+| Service history | Yes | Yes |
+| Fuel logging | Yes | Yes |
+| Maintenance notifications | Yes | Yes |
+| Health Score | Yes | Yes |
+| VIN + recall campaigns | Yes | Yes |
+| Receipt vault | — | Yes |
+| AI receipt scan | — | Yes |
+| Repair explainer | — | Yes |
+| Quote check | — | Yes |
+| PDF ownership report | — | Yes |
 
-- VIN entry is normalized and format-validated on-device
-  (`lib/domain/vin.ts`) before it's ever sent anywhere.
-- Decoded make/model/year/trim/engine and the recall list persist to the
-  local `vehicles` row (as of schema v3) and sync through the existing
-  queue, so they survive restarts and follow the account across devices.
-- Recall status is explicitly three-valued — **unknown** (never checked),
-  **none** (checked, nothing open), or **open** (with component/summary/
-  remedy per recall) — so a missing check is never confused with a clean one.
-- Without the deployed function, the buttons still render but explain that
-  the feature isn't available in this build.
+The free tier is intentionally useful. Pro is positioned around **proof + intelligence**, not withholding the basic maintenance loop.
 
-Explicitly out of scope for Phase 6: family/community sharing and fleet-mode
-collaboration — both are single-owner-only for now (see Roadmap).
+## Production notes
 
-## Current scope (Phases 1–6)
-
-- Garage: multiple vehicles with photo, mileage, health score
-- Maintenance log: typed service records with cost, shop, receipt photo, next-due prefill
-- Reminders: date and/or mileage due, recurring rules that roll forward on completion
-- Dashboard: needs-attention list, month/year spend, recent activity
-- Expenses: month/year/lifetime totals, cost per mile, repair-vs-maintenance split
-- Accounts: email/password auth (Supabase), optional — local-only mode always works
-- Cloud sync: offline-first queue, LWW merge, soft deletes, photo/receipt storage
-- Monetization: free limits (2 vehicles, no receipts), Pro subscription via RevenueCat, paywall, restore
-- AI: receipt scanner, repair explainer, price checker (Pro, via Supabase Edge Function)
-- PDF report: shareable vehicle history / sale report, generated on-device (Pro)
-- VIN decode & recall checks: on-device VIN validation, NHTSA-backed decode and recall
-  status, synced via the existing queue (free, via Supabase Edge Function)
-- Settings: account & sync status, plan & upgrade, data reset
-
-## Roadmap
-
-- Future — family sharing / community features, fleet-mode collaboration (deliberately
-  excluded from Phase 6 to keep the sync schema and permission model simple)
+- `Privacy` and `Terms` screens are included in-app, but App Store / Play Console submissions still need the real hosted Privacy Policy, support URL, and Google account-deletion web resource configured in store metadata.
+- Notifications require user permission. On Android 12+ a precise date reminder may also require the system's **Alarms & reminders** special access; Glovebox opens that system screen when notifications are enabled.
+- NHTSA campaign results are year/make/model matches, not proof that a specific VIN has an unresolved recall. The vehicle screen links users to NHTSA for VIN-specific verification.
+- The final release gate is a real production-like Supabase migration/function deploy plus physical-device QA, especially account switching, offline sync, notification permission flows, purchases, and destructive account deletion.

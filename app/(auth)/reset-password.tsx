@@ -1,0 +1,11 @@
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text } from 'react-native';
+import { Button, Field } from '@/components/ui';
+import { useAuth } from '@/lib/auth/session';
+import { palette, spacing, typography } from '@/lib/theme';
+export default function ResetPasswordScreen(){const router=useRouter();const updatePassword=useAuth(s=>s.updatePassword);const recoveryMode=useAuth(s=>s.recoveryMode);const[password,setPassword]=useState('');const[confirm,setConfirm]=useState('');const[busy,setBusy]=useState(false);const[error,setError]=useState<string|null>(null);
+  async function save(){setError(null);if(password.length<8){setError('Password must be at least 8 characters');return;}if(password!==confirm){setError('Passwords do not match');return;}setBusy(true);try{await updatePassword(password);router.replace('/');}catch(e){setError(e instanceof Error?e.message:'Could not update password');}finally{setBusy(false);}}
+  return <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS==='ios'?'padding':undefined}><ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"><Text style={styles.title}>Choose a new password</Text>{!recoveryMode&&<Text style={styles.hint}>Open this screen from the reset link in your email so Glovebox can verify the request.</Text>}<Field label="New password" secureTextEntry autoComplete="new-password" value={password} onChangeText={setPassword}/><Field label="Confirm password" secureTextEntry value={confirm} onChangeText={setConfirm}/>{error&&<Text style={styles.error}>{error}</Text>}<Button title="Update password" onPress={()=>void save()} loading={busy} disabled={!password||!confirm}/></ScrollView></KeyboardAvoidingView>;
+}
+const styles=StyleSheet.create({screen:{flex:1,backgroundColor:palette.bg.app},content:{padding:spacing.screenPadding,paddingTop:spacing.xl},title:{color:palette.text.primary,fontSize:typography.h2.size,fontWeight:typography.h2.weight,marginBottom:spacing.sm},hint:{color:palette.text.secondary,fontSize:typography.caption.size,lineHeight:18,marginBottom:spacing.lg},error:{color:palette.status.overdue,fontSize:typography.caption.size,marginBottom:spacing.md}});
