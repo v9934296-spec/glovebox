@@ -6,14 +6,12 @@
     "orientation": "portrait",
     "scheme": "glovebox",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "app.glovebox.mobile",
       "supportsTablet": false
     },
     "android": {
       "package": "app.glovebox.mobile",
-      "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.SCHEDULE_EXACT_ALARM"
       ]
