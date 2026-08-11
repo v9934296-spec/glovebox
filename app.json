@@ -15,7 +15,7 @@
       "package": "app.glovebox.mobile",
       "edgeToEdgeEnabled": true,
       "permissions": [
-        "SCHEDULE_EXACT_ALARM"
+        "android.permission.SCHEDULE_EXACT_ALARM"
       ]
     },
     "web": {
