@@ -22,40 +22,31 @@ if (report.error) {
 }
 
 const vulnerabilities = report.vulnerabilities ?? {};
-const advisoryId = (via) => {
-  const text = `${via.url ?? ''} ${via.title ?? ''}`;
-  return [...allowedAdvisories].find((id) => text.includes(id)) ?? null;
-};
-
-function isAllowedOnly(name, seen = new Set()) {
-  if (seen.has(name)) return false;
-  const vuln = vulnerabilities[name];
-  if (!vuln) return false;
-  const nextSeen = new Set(seen);
-  nextSeen.add(name);
-  if (!Array.isArray(vuln.via) || vuln.via.length === 0) return false;
-  return vuln.via.every((via) => {
-    if (typeof via === 'string') return isAllowedOnly(via, nextSeen);
-    return advisoryId(via) !== null;
-  });
+const directAdvisories = [];
+for (const [packageName, vuln] of Object.entries(vulnerabilities)) {
+  for (const via of Array.isArray(vuln.via) ? vuln.via : []) {
+    if (typeof via === 'string') continue; // propagated dependency edge, not a distinct advisory
+    const rank = severityRank[via.severity ?? vuln.severity] ?? 0;
+    if (rank >= severityRank.high) directAdvisories.push({ packageName, ...via });
+  }
 }
 
-const blockers = Object.entries(vulnerabilities).filter(([, vuln]) =>
-  (severityRank[vuln.severity] ?? 0) >= severityRank.high && !isAllowedOnly(vuln.name),
-);
+const advisoryId = (advisory) => {
+  const text = `${advisory.url ?? ''} ${advisory.title ?? ''}`;
+  return [...allowedAdvisories].find((id) => text.includes(id)) ?? null;
+};
+const blockers = directAdvisories.filter((advisory) => advisoryId(advisory) === null);
+const allowed = directAdvisories.filter((advisory) => advisoryId(advisory) !== null);
 
-const allowedHigh = Object.entries(vulnerabilities)
-  .filter(([, vuln]) => (severityRank[vuln.severity] ?? 0) >= severityRank.high && isAllowedOnly(vuln.name))
-  .map(([name]) => name);
-
-if (allowedHigh.length) {
-  console.warn(`SECURITY EXCEPTION: ${allowedHigh.length} high-severity audit entries trace only to the two image-size no-fix advisories: ${allowedHigh.join(', ')}`);
+if (allowed.length) {
+  const ids = [...new Set(allowed.map((a) => advisoryId(a)).filter(Boolean))];
+  console.warn(`SECURITY EXCEPTION: ${ids.join(', ')} are currently allowlisted because GitHub reports no patched image-size release.`);
   console.warn('Track upstream Expo/Metro/image-size and remove this exception as soon as a compatible patched release exists.');
 }
 
 if (blockers.length) {
-  console.error('FAIL: unapproved high/critical production dependency vulnerabilities:');
-  for (const [name, vuln] of blockers) console.error(`- ${name}: ${vuln.severity}`);
+  console.error('FAIL: unapproved high/critical production dependency advisories:');
+  for (const advisory of blockers) console.error(`- ${advisory.packageName}: ${advisory.severity ?? 'high'} · ${advisory.title ?? advisory.url ?? 'unknown advisory'}`);
   process.exit(1);
 }
 
