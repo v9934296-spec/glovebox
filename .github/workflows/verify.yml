@@ -12,6 +12,11 @@ jobs:
         with:
           node-version: 22.x
       - run: npm install --legacy-peer-deps
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-lock
+          path: package-lock.json
+          retention-days: 1
       - run: npm run verify
       - run: npm run security:audit
       - run: npx expo install --check
