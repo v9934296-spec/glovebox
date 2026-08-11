@@ -9,6 +9,8 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
 async function removeFolder(admin: ReturnType<typeof createClient>, bucket: string, prefix: string) {
+  // Always read offset 0 after deleting a page. Advancing the offset would skip
+  // objects because the remaining list shifts left after each deletion.
   for (;;) {
     const { data, error } = await admin.storage.from(bucket).list(prefix, { limit: 100, offset: 0 });
     if (error) throw error;
@@ -28,7 +30,9 @@ async function deleteRevenueCatCustomer(userId: string) {
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     signal: AbortSignal.timeout(8000),
   });
-  if (!response.ok && response.status !== 404) throw new Error(`RevenueCat customer deletion failed (${response.status})`);
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`RevenueCat customer deletion failed (${response.status})`);
+  }
 }
 
 Deno.serve(async (req) => {
@@ -52,9 +56,11 @@ Deno.serve(async (req) => {
 
   const admin = createClient(url, service);
   try {
+    // Delete the third-party customer first. A retry is safe (404 is accepted),
+    // and we avoid deleting user media before confirming RevenueCat is reachable.
+    await deleteRevenueCatCustomer(user.id);
     await removeFolder(admin, 'glovebox-media', `${user.id}/vehicles`);
     await removeFolder(admin, 'glovebox-media', `${user.id}/service_records`);
-    await deleteRevenueCatCustomer(user.id);
     const { error } = await admin.auth.admin.deleteUser(user.id);
     if (error) throw error;
     return json({ deleted: true });

@@ -26,8 +26,9 @@ export function createVehicle(input:NewVehicle):Vehicle{
 }
 export function updateVehicle(id:string,input:Pick<NewVehicle,'nickname'|'make'|'model'|'year'|'trim'|'vin'|'licensePlate'|'purchaseDate'|'purchasePrice'|'photoUri'>){
   const previous=getVehicle(id); const ts=nowIso(); getDb().runSync(`UPDATE vehicles SET nickname=?,make=?,model=?,year=?,trim=?,vin=?,license_plate=?,purchase_date=?,purchase_price=?,photo_uri=?,
-    vin_decoded_at=CASE WHEN vin IS ? THEN vin_decoded_at ELSE NULL END,vin_decode_json=CASE WHEN vin IS ? THEN vin_decode_json ELSE NULL END,updated_at=?
-    WHERE id=? AND workspace_id=?`,[input.nickname,input.make,input.model,input.year,input.trim,input.vin,input.licensePlate,input.purchaseDate,input.purchasePrice,input.photoUri,input.vin,input.vin,ts,id,getActiveWorkspace()]);
+    vin_decoded_at=CASE WHEN vin IS ? THEN vin_decoded_at ELSE NULL END,vin_decode_json=CASE WHEN vin IS ? THEN vin_decode_json ELSE NULL END,
+    recall_checked_at=CASE WHEN vin IS ? THEN recall_checked_at ELSE NULL END,recall_json=CASE WHEN vin IS ? THEN recall_json ELSE NULL END,updated_at=?
+    WHERE id=? AND workspace_id=?`,[input.nickname,input.make,input.model,input.year,input.trim,input.vin,input.licensePlate,input.purchaseDate,input.purchasePrice,input.photoUri,input.vin,input.vin,input.vin,input.vin,ts,id,getActiveWorkspace()]);
   enqueueChange('vehicles',id); if(previous?.photoUri&&previous.photoUri!==input.photoUri)deleteLocalMedia(previous.photoUri); bumpDataVersion();
 }
 export function updateVehicleMileage(id:string,mileage:number){ getDb().runSync('UPDATE vehicles SET mileage=?,updated_at=? WHERE id=? AND workspace_id=?',[mileage,nowIso(),id,getActiveWorkspace()]); enqueueChange('vehicles',id); bumpDataVersion(); }
