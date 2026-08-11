@@ -14,7 +14,8 @@
     "lint": "eslint .",
     "expo:check": "expo install --check && expo-doctor",
     "audit:release": "node scripts/release-audit.mjs",
-    "verify": "npm run typecheck && npm run lint && npm test -- --runInBand && npm run audit:release"
+    "verify": "npm run typecheck && npm run lint && npm test -- --runInBand && npm run audit:release",
+    "security:audit": "node scripts/security-audit.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
