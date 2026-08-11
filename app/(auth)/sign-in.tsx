@@ -39,7 +39,7 @@ export default function SignInScreen() {
           <Ionicons name="car-sport" size={44} color={palette.accent.primary} />
           <Text style={styles.title}>Glovebox</Text>
           <Text style={styles.tagline}>
-            Your car's memory, maintenance plan, and repair history in one app.
+            Your car’s private memory — maintenance, fuel, reminders, and repair help that still works offline.
           </Text>
         </View>
 
@@ -75,7 +75,7 @@ export default function SignInScreen() {
 
         <Button title="Continue without account" variant="ghost" onPress={onSkip} style={{ marginTop: spacing.xl }} />
         <Text style={styles.skipHint}>
-          Local-only mode keeps everything on this device. You can sign in later from Settings to back up and sync.
+          No account required. Local-only mode keeps your garage private on this device; sign in later only if you want backup, sync, or Pro AI.
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>

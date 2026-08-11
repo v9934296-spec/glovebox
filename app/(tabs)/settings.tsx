@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Screen, SectionHeader } from '@/components/ui';
 import { useAuth } from '@/lib/auth/session';
@@ -8,168 +8,26 @@ import { resetAllData } from '@/lib/db/database';
 import { useVehicles } from '@/lib/db/hooks';
 import { FREE_LIMITS } from '@/lib/monetization/entitlements';
 import { useEntitlements } from '@/lib/monetization/purchases';
+import { disableNotifications, enableNotifications, notificationsEnabled } from '@/lib/notifications/reminders';
 import { syncNow, useSyncStatus } from '@/lib/sync/engine';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { palette, spacing, typography } from '@/lib/theme';
 
-export default function SettingsScreen() {
-  const router = useRouter();
-  const vehicles = useVehicles();
-  const { status, session, signOut } = useAuth();
-  const { syncing, lastSyncedAt, pending, error } = useSyncStatus();
-  const { status: purchasesStatus, isPro } = useEntitlements();
-
-  function confirmReset() {
-    Alert.alert(
-      'Erase all data',
-      'This permanently deletes every vehicle, service record, and reminder on this device. Cloud copies (if you sync) are not touched. There is no undo.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Erase everything', style: 'destructive', onPress: () => resetAllData() },
-      ],
-    );
-  }
-
-  function confirmSignOut() {
-    Alert.alert('Sign out', 'Your data stays on this device and stops syncing until you sign in again.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign out',
-        style: 'destructive',
-        onPress: () => {
-          void signOut().catch((e: unknown) => {
-            Alert.alert('Sign out failed', e instanceof Error ? e.message : 'Try again.');
-          });
-        },
-      },
-    ]);
-  }
-
-  return (
-    <Screen style={{ padding: 0 }}>
-      <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'] }}>
-        <SectionHeader title="Account & sync" />
-        {status === 'signedIn' ? (
-          <>
-            <Card>
-              <Row label="Signed in as" value={session?.user.email ?? '—'} />
-              <Row label="Pending changes" value={String(pending)} />
-              <Row label="Last synced" value={lastSyncedAt ? formatTimestamp(lastSyncedAt) : 'never'} last />
-            </Card>
-            {error != null && <Text style={styles.syncError}>Last sync error: {error}</Text>}
-            <View style={styles.accountButtons}>
-              <Button
-                title={syncing ? 'Syncing…' : 'Sync now'}
-                variant="secondary"
-                loading={syncing}
-                onPress={() => void syncNow()}
-                style={{ flex: 1 }}
-              />
-              <Button title="Sign out" variant="ghost" onPress={confirmSignOut} style={{ flex: 1 }} />
-            </View>
-          </>
-        ) : isSupabaseConfigured ? (
-          <>
-            <Card>
-              <Text style={styles.localOnlyText}>
-                You're in local-only mode. Everything stays on this device — sign in to back up your garage and
-                sync across devices.
-              </Text>
-            </Card>
-            <Button
-              title="Sign in or create account"
-              onPress={() => router.push('/(auth)/sign-in')}
-              style={{ marginTop: spacing.md }}
-            />
-          </>
-        ) : (
-          <Card>
-            <Text style={styles.localOnlyText}>
-              Cloud sync is not configured in this build. All data stays on this device.
-            </Text>
-          </Card>
-        )}
-
-        <SectionHeader title="Units" />
-        <Card>
-          <Row label="Distance" value="Miles" />
-          <Row label="Currency" value="USD" last />
-        </Card>
-        <Text style={styles.hint}>Metric units and other currencies are coming later.</Text>
-
-        <SectionHeader title="Glovebox Pro" />
-        <Card>
-          <Row label="Plan" value={isPro ? 'Pro' : 'Free'} />
-          <Row
-            label="Vehicles"
-            value={isPro ? `${vehicles.length} (unlimited)` : `${vehicles.length} of ${FREE_LIMITS.maxVehicles}`}
-            last
-          />
-        </Card>
-        {isPro ? (
-          <Text style={styles.hint}>Manage or cancel your subscription in your store account settings.</Text>
-        ) : (
-          <>
-            <Button
-              title="Upgrade to Pro"
-              onPress={() => router.push('/paywall')}
-              style={{ marginTop: spacing.md }}
-            />
-            {purchasesStatus === 'unavailable' && (
-              <Text style={styles.hint}>Purchases are not available in this build.</Text>
-            )}
-          </>
-        )}
-
-        <SectionHeader title="Coming soon" />
-        <Card>
-          <Row label="Notifications" value="Soon" />
-          <Row label="PDF vehicle report" value="Phase 5" last />
-        </Card>
-
-        <SectionHeader title="Data" />
-        <Card>
-          <Row label="Vehicles on this device" value={String(vehicles.length)} last />
-        </Card>
-        <Button title="Erase all data" variant="danger" onPress={confirmReset} style={{ marginTop: spacing.lg }} />
-
-        <Text style={styles.version}>Glovebox {Constants.expoConfig?.version ?? ''}</Text>
-      </ScrollView>
-    </Screen>
-  );
+export default function SettingsScreen(){const router=useRouter();const vehicles=useVehicles();const{status,session,signOut,deleteAccount}=useAuth();const{syncing,lastSyncedAt,pending,error}=useSyncStatus();const{status:purchasesStatus,isPro}=useEntitlements();const[notifs,setNotifs]=useState(false);const[notifBusy,setNotifBusy]=useState(false);useEffect(()=>{void notificationsEnabled().then(setNotifs);},[]);
+ function confirmReset(){Alert.alert('Erase this garage','This permanently deletes the vehicles, service history, fuel entries, and reminders in the current local workspace on this device. Cloud copies are not touched and can download again on the next sync.',[{text:'Cancel',style:'cancel'},{text:'Erase local data',style:'destructive',onPress:()=>resetAllData()}]);}
+ function confirmSignOut(){Alert.alert('Sign out','This account’s cached data stays isolated on this device and will not be shown to another account.',[{text:'Cancel',style:'cancel'},{text:'Sign out',style:'destructive',onPress:()=>{void signOut().catch(e=>Alert.alert('Sign out failed',e instanceof Error?e.message:'Try again.'));}}]);}
+ function confirmDelete(){Alert.alert('Delete Glovebox account','This permanently deletes your Glovebox cloud account, synced vehicle records, reminders, fuel entries, and cloud receipt/photo copies. It does not cancel an App Store or Play Store subscription; manage that separately in your store account. This cannot be undone.',[{text:'Cancel',style:'cancel'},{text:'Delete account',style:'destructive',onPress:()=>Alert.alert('Delete forever?','There is no recovery after this step.',[{text:'Cancel',style:'cancel'},{text:'Delete forever',style:'destructive',onPress:()=>{void deleteAccount().catch(e=>Alert.alert('Deletion failed',e instanceof Error?e.message:'Try again.'));}}])}]);}
+ async function toggleNotifications(){setNotifBusy(true);try{if(notifs){await disableNotifications();setNotifs(false);}else{const result=await enableNotifications();setNotifs(result.enabled);if(!result.enabled)Alert.alert('Notifications are off',result.reason??'Permission was not granted.');}}finally{setNotifBusy(false);}}
+ return <Screen style={{padding:0}}><ScrollView contentContainerStyle={{padding:spacing.screenPadding,paddingBottom:spacing['2xl']}}>
+  <SectionHeader title="Account & sync"/>{status==='signedIn'?<><Card><Row label="Signed in as" value={session?.user.email??'—'}/><Row label="Pending changes" value={String(pending)}/><Row label="Last synced" value={lastSyncedAt?formatTimestamp(lastSyncedAt):'never'} last/></Card>{error&&<Text style={styles.syncError}>Last sync error: {error}</Text>}<View style={styles.accountButtons}><Button title={syncing?'Syncing…':'Sync now'} variant="secondary" loading={syncing} onPress={()=>void syncNow()} style={{flex:1}}/><Button title="Sign out" variant="ghost" onPress={confirmSignOut} style={{flex:1}}/></View></>:isSupabaseConfigured?<><Card><Text style={styles.localOnlyText}>Local-only mode is private to this device. Your garage, fuel log, reminders, and Health Score work without an account or connection. Sign in only when you want backup/sync and Pro AI.</Text></Card><Button title="Sign in or create account" onPress={()=>router.push('/(auth)/sign-in')} style={{marginTop:spacing.md}}/></>:<Card><Text style={styles.localOnlyText}>Cloud services are not configured in this build. Glovebox remains usable offline and all data stays on this device.</Text></Card>}
+  <SectionHeader title="Maintenance notifications"/><Card><Row label="Status" value={notifs?'On':'Off'} last/></Card><Button title={notifs?'Turn notifications off':'Enable maintenance reminders'} variant="secondary" loading={notifBusy} onPress={()=>void toggleNotifications()} style={{marginTop:spacing.md}}/><Text style={styles.hint}>Date reminders are scheduled locally. Mileage reminders fire when the odometer you record reaches the target.</Text>
+  <SectionHeader title="Glovebox Pro"/><Card><Row label="Plan" value={isPro?'Pro':'Free'}/><Row label="Vehicles" value={isPro?`${vehicles.length} (unlimited)`:`${vehicles.length} of ${FREE_LIMITS.maxVehicles}`} last/></Card>{isPro?<Text style={styles.hint}>Pro adds the receipt vault, AI receipt scan, repair explanations, quote checks, unlimited vehicles, and export reports.</Text>:<><Text style={styles.hint}>Free keeps the core useful: up to {FREE_LIMITS.maxVehicles} vehicles, offline service + fuel history, reminders, and Health Score. Pro is for cloud-backed power tools.</Text><Button title="See Glovebox Pro" onPress={()=>router.push('/paywall')} style={{marginTop:spacing.md}}/>{purchasesStatus==='unavailable'&&<Text style={styles.hint}>Store purchases are unavailable in this build.</Text>}</>}
+  <SectionHeader title="Units"/><Card><Row label="Distance" value="Miles"/><Row label="Fuel" value="Gallons"/><Row label="Currency" value="USD" last/></Card>
+  <SectionHeader title="Privacy & legal"/><View style={{gap:spacing.sm}}><Button title="Privacy policy" variant="secondary" onPress={()=>router.push('/legal/privacy')}/><Button title="Terms of use" variant="secondary" onPress={()=>router.push('/legal/terms')}/></View>
+  <SectionHeader title="Data"/><Card><Row label="Vehicles in this workspace" value={String(vehicles.length)} last/></Card><Button title="Erase local workspace" variant="danger" onPress={confirmReset} style={{marginTop:spacing.lg}}/>{status==='signedIn'&&<Button title="Delete account" variant="danger" onPress={confirmDelete} style={{marginTop:spacing.md}}/>}
+  <Text style={styles.version}>Glovebox {Constants.expoConfig?.version??''}</Text>
+ </ScrollView></Screen>;
 }
-
-function formatTimestamp(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
-}
-
-function Row({ label, value, last }: { label: string; value: string; last?: boolean }) {
-  return (
-    <View style={[styles.row, !last && styles.rowBorder]}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue}>{value}</Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.sm },
-  rowBorder: { borderBottomWidth: 1, borderBottomColor: palette.border.subtle },
-  rowLabel: { color: palette.text.primary, fontSize: typography.body.size },
-  rowValue: { color: palette.text.tertiary, fontSize: typography.body.size },
-  hint: { color: palette.text.tertiary, fontSize: typography.caption.size, marginTop: spacing.sm },
-  localOnlyText: {
-    color: palette.text.secondary,
-    fontSize: typography.body.size,
-    lineHeight: typography.body.lineHeight,
-  },
-  accountButtons: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.md },
-  syncError: { color: palette.status.overdue, fontSize: typography.caption.size, marginTop: spacing.sm },
-  version: {
-    color: palette.text.tertiary,
-    fontSize: typography.caption.size,
-    textAlign: 'center',
-    marginTop: spacing['2xl'],
-  },
-});
+function formatTimestamp(iso:string){const d=new Date(iso);return Number.isNaN(d.getTime())?iso:d.toLocaleString();}
+function Row({label,value,last}:{label:string;value:string;last?:boolean}){return <View style={[styles.row,!last&&styles.rowBorder]}><Text style={styles.rowLabel}>{label}</Text><Text style={styles.rowValue}>{value}</Text></View>;}
+const styles=StyleSheet.create({row:{flexDirection:'row',justifyContent:'space-between',paddingVertical:spacing.sm,gap:spacing.md},rowBorder:{borderBottomWidth:1,borderBottomColor:palette.border.subtle},rowLabel:{color:palette.text.primary,fontSize:typography.body.size,flex:1},rowValue:{color:palette.text.tertiary,fontSize:typography.body.size},hint:{color:palette.text.tertiary,fontSize:typography.caption.size,marginTop:spacing.sm,lineHeight:18},localOnlyText:{color:palette.text.secondary,fontSize:typography.body.size,lineHeight:typography.body.lineHeight},accountButtons:{flexDirection:'row',gap:spacing.md,marginTop:spacing.md},syncError:{color:palette.status.overdue,fontSize:typography.caption.size,marginTop:spacing.sm},version:{color:palette.text.tertiary,fontSize:typography.caption.size,textAlign:'center',marginTop:spacing['2xl']}});

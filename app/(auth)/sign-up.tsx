@@ -87,7 +87,7 @@ export default function SignUpScreen() {
           disabled={!email.trim() || !password || !confirm}
         />
         <Text style={styles.hint}>
-          Your vehicles and records on this device will be backed up to your account on first sync.
+          If this device already has a local-only garage, Glovebox will ask before moving it into the new account. Nothing is merged silently.
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>

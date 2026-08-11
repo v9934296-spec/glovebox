@@ -1,113 +1,13 @@
-import { nextOccurrence, todayIso } from '../domain/due';
-import type { NewReminder, Reminder } from '../domain/types';
+import { nextOccurrence,todayIso } from '../domain/due';
+import type { NewReminder,Reminder } from '../domain/types';
 import { enqueueChange } from '../sync/queue';
-import { bumpDataVersion, getDb, newId, nowIso } from './database';
-
-type ReminderRow = {
-  id: string;
-  vehicle_id: string;
-  title: string;
-  category: string;
-  due_date: string | null;
-  due_mileage: number | null;
-  recurrence_type: string;
-  recurrence_interval_months: number | null;
-  recurrence_interval_miles: number | null;
-  status: string;
-  completed_at: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-function fromRow(r: ReminderRow): Reminder {
-  return {
-    id: r.id,
-    vehicleId: r.vehicle_id,
-    title: r.title,
-    category: r.category,
-    dueDate: r.due_date,
-    dueMileage: r.due_mileage,
-    recurrenceType: r.recurrence_type as Reminder['recurrenceType'],
-    recurrenceIntervalMonths: r.recurrence_interval_months,
-    recurrenceIntervalMiles: r.recurrence_interval_miles,
-    status: r.status as Reminder['status'],
-    completedAt: r.completed_at,
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
-  };
-}
-
-export function listReminders(filter?: { vehicleId?: string; status?: Reminder['status'] }): Reminder[] {
-  const clauses: string[] = ['deleted_at IS NULL'];
-  const params: (string | number)[] = [];
-  if (filter?.vehicleId) {
-    clauses.push('vehicle_id = ?');
-    params.push(filter.vehicleId);
-  }
-  if (filter?.status) {
-    clauses.push('status = ?');
-    params.push(filter.status);
-  }
-  const where = `WHERE ${clauses.join(' AND ')}`;
-  const rows = getDb().getAllSync<ReminderRow>(
-    `SELECT * FROM reminders ${where} ORDER BY due_date IS NULL, due_date ASC, due_mileage ASC`,
-    params,
-  );
-  return rows.map(fromRow);
-}
-
-export function createReminder(input: NewReminder): Reminder {
-  const id = newId();
-  const ts = nowIso();
-  getDb().runSync(
-    `INSERT INTO reminders (id, vehicle_id, title, category, due_date, due_mileage,
-       recurrence_type, recurrence_interval_months, recurrence_interval_miles,
-       status, completed_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', NULL, ?, ?)`,
-    [
-      id,
-      input.vehicleId,
-      input.title,
-      input.category,
-      input.dueDate,
-      input.dueMileage,
-      input.recurrenceType,
-      input.recurrenceIntervalMonths,
-      input.recurrenceIntervalMiles,
-      ts,
-      ts,
-    ],
-  );
-  enqueueChange('reminders', id);
-  bumpDataVersion();
-  return { ...input, id, status: 'active', completedAt: null, createdAt: ts, updatedAt: ts };
-}
-
-/**
- * Complete a reminder. Recurring reminders roll forward to the next occurrence
- * (stay active with new dues); one-shot reminders are marked completed.
- */
-export function completeReminder(reminder: Reminder, currentMileage: number) {
-  const ts = nowIso();
-  const next = nextOccurrence(reminder, { date: todayIso(), mileage: currentMileage });
-  if (next) {
-    getDb().runSync(
-      'UPDATE reminders SET due_date = ?, due_mileage = ?, updated_at = ? WHERE id = ?',
-      [next.dueDate, next.dueMileage, ts, reminder.id],
-    );
-  } else {
-    getDb().runSync(
-      "UPDATE reminders SET status = 'completed', completed_at = ?, updated_at = ? WHERE id = ?",
-      [ts, ts, reminder.id],
-    );
-  }
-  enqueueChange('reminders', reminder.id);
-  bumpDataVersion();
-}
-
-export function deleteReminder(id: string) {
-  const ts = nowIso();
-  getDb().runSync('UPDATE reminders SET deleted_at = ?, updated_at = ? WHERE id = ?', [ts, ts, id]);
-  enqueueChange('reminders', id);
-  bumpDataVersion();
-}
+import { bumpDataVersion,getActiveWorkspace,getDb,newId,nowIso } from './database';
+type ReminderRow={id:string;vehicle_id:string;title:string;category:string;due_date:string|null;due_mileage:number|null;recurrence_type:string;recurrence_interval_months:number|null;recurrence_interval_miles:number|null;status:string;completed_at:string|null;created_at:string;updated_at:string};
+function fromRow(r:ReminderRow):Reminder{return{id:r.id,vehicleId:r.vehicle_id,title:r.title,category:r.category,dueDate:r.due_date,dueMileage:r.due_mileage,recurrenceType:r.recurrence_type as Reminder['recurrenceType'],recurrenceIntervalMonths:r.recurrence_interval_months,recurrenceIntervalMiles:r.recurrence_interval_miles,status:r.status as Reminder['status'],completedAt:r.completed_at,createdAt:r.created_at,updatedAt:r.updated_at};}
+export function listReminders(filter?:{vehicleId?:string;status?:Reminder['status']}):Reminder[]{const clauses=['workspace_id=?','deleted_at IS NULL'];const params:(string|number)[]=[getActiveWorkspace()];if(filter?.vehicleId){clauses.push('vehicle_id=?');params.push(filter.vehicleId);}if(filter?.status){clauses.push('status=?');params.push(filter.status);}return getDb().getAllSync<ReminderRow>(`SELECT * FROM reminders WHERE ${clauses.join(' AND ')} ORDER BY due_date IS NULL,due_date ASC,due_mileage ASC`,params).map(fromRow);}
+export function getReminder(id:string):Reminder|null{const r=getDb().getFirstSync<ReminderRow>('SELECT * FROM reminders WHERE id=? AND workspace_id=? AND deleted_at IS NULL',[id,getActiveWorkspace()]);return r?fromRow(r):null;}
+export function createReminder(input:NewReminder):Reminder{const id=newId(),ts=nowIso(),w=getActiveWorkspace();getDb().runSync(`INSERT INTO reminders(id,workspace_id,vehicle_id,title,category,due_date,due_mileage,recurrence_type,recurrence_interval_months,recurrence_interval_miles,status,completed_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,'active',NULL,?,?)`,[id,w,input.vehicleId,input.title,input.category,input.dueDate,input.dueMileage,input.recurrenceType,input.recurrenceIntervalMonths,input.recurrenceIntervalMiles,ts,ts]);enqueueChange('reminders',id);bumpDataVersion();return{...input,id,status:'active',completedAt:null,createdAt:ts,updatedAt:ts};}
+export function updateReminder(id:string,input:NewReminder){const ts=nowIso();getDb().runSync(`UPDATE reminders SET vehicle_id=?,title=?,category=?,due_date=?,due_mileage=?,recurrence_type=?,recurrence_interval_months=?,recurrence_interval_miles=?,status='active',completed_at=NULL,updated_at=? WHERE id=? AND workspace_id=?`,[input.vehicleId,input.title,input.category,input.dueDate,input.dueMileage,input.recurrenceType,input.recurrenceIntervalMonths,input.recurrenceIntervalMiles,ts,id,getActiveWorkspace()]);enqueueChange('reminders',id);bumpDataVersion();}
+export function completeReminder(reminder:Reminder,currentMileage:number){const ts=nowIso(),next=nextOccurrence(reminder,{date:todayIso(),mileage:currentMileage});if(next)getDb().runSync('UPDATE reminders SET due_date=?,due_mileage=?,updated_at=? WHERE id=? AND workspace_id=?',[next.dueDate,next.dueMileage,ts,reminder.id,getActiveWorkspace()]);else getDb().runSync("UPDATE reminders SET status='completed',completed_at=?,updated_at=? WHERE id=? AND workspace_id=?",[ts,ts,reminder.id,getActiveWorkspace()]);enqueueChange('reminders',reminder.id);bumpDataVersion();}
+export function upsertMaintenanceReminder(input:{vehicleId:string;title:string;category:string;dueDate:string|null;dueMileage:number|null}){if(!input.dueDate&&input.dueMileage==null)return;const w=getActiveWorkspace();const existing=getDb().getFirstSync<{id:string}>('SELECT id FROM reminders WHERE workspace_id=? AND vehicle_id=? AND category=? AND status=\'active\' AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT 1',[w,input.vehicleId,input.category]);if(existing){const ts=nowIso();getDb().runSync('UPDATE reminders SET title=?,due_date=?,due_mileage=?,updated_at=? WHERE id=? AND workspace_id=?',[input.title,input.dueDate,input.dueMileage,ts,existing.id,w]);enqueueChange('reminders',existing.id);bumpDataVersion();}else createReminder({vehicleId:input.vehicleId,title:input.title,category:input.category,dueDate:input.dueDate,dueMileage:input.dueMileage,recurrenceType:'none',recurrenceIntervalMonths:null,recurrenceIntervalMiles:null});}
+export function deleteReminder(id:string){const ts=nowIso();getDb().runSync('UPDATE reminders SET deleted_at=?,updated_at=? WHERE id=? AND workspace_id=?',[ts,ts,id,getActiveWorkspace()]);enqueueChange('reminders',id);bumpDataVersion();}

@@ -8,8 +8,11 @@ import { aiAvailability, scanReceipt } from '@/lib/ai/client';
 import { isEmptyScan } from '@/lib/ai/parse';
 import { useVehicles } from '@/lib/db/hooks';
 import { createServiceRecord } from '@/lib/db/serviceRepo';
+import { upsertMaintenanceReminder } from '@/lib/db/reminderRepo';
 import { updateVehicleMileage } from '@/lib/db/vehicleRepo';
 import { addMonthsIso, todayIso } from '@/lib/domain/due';
+import { isValidIsoDate } from '@/lib/domain/date';
+import { persistLocalMedia } from '@/lib/media/local';
 import { SERVICE_TYPES, serviceTypeDef } from '@/lib/domain/serviceTypes';
 import { canAttachReceipt, canUseAi } from '@/lib/monetization/entitlements';
 import { useIsPro } from '@/lib/monetization/purchases';
@@ -35,7 +38,7 @@ export default function AddServiceScreen() {
     const def = serviceTypeDef(serviceType);
     const m = Number(mileage.replace(/[^\d]/g, ''));
     return {
-      date: def.defaultIntervalMonths && /^\d{4}-\d{2}-\d{2}$/.test(date) ? addMonthsIso(date, def.defaultIntervalMonths) : null,
+      date: def.defaultIntervalMonths && isValidIsoDate(date) ? addMonthsIso(date, def.defaultIntervalMonths) : null,
       mileage: def.defaultIntervalMiles && Number.isFinite(m) && m > 0 ? m + def.defaultIntervalMiles : null,
     };
   }, [serviceType, date, mileage]);
@@ -100,17 +103,18 @@ export default function AddServiceScreen() {
     }
   }
 
-  function save() {
+  async function save() {
     if (!vehicle) return;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      setError('Date must be YYYY-MM-DD');
+    if (!isValidIsoDate(date)) {
+      setError('Enter a real date as YYYY-MM-DD');
       return;
     }
-    if (effectiveNextDueDate && !/^\d{4}-\d{2}-\d{2}$/.test(effectiveNextDueDate)) {
-      setError('Next due date must be YYYY-MM-DD');
+    if (effectiveNextDueDate && !isValidIsoDate(effectiveNextDueDate)) {
+      setError('Next due date must be a real date as YYYY-MM-DD');
       return;
     }
     const mileageNum = mileage ? Number(mileage.replace(/[^\d]/g, '')) : null;
+    const savedReceiptUri = await persistLocalMedia(receiptUri, 'receipts');
     createServiceRecord({
       vehicleId: vehicle.id,
       serviceType,
@@ -119,13 +123,14 @@ export default function AddServiceScreen() {
       cost: cost ? Number(cost.replace(/[^\d.]/g, '')) : null,
       shopName: shopName.trim() || null,
       notes: notes.trim() || null,
-      receiptUri,
+      receiptUri: savedReceiptUri,
       nextDueDate: effectiveNextDueDate || null,
       nextDueMileage: effectiveNextDueMileage ? Number(effectiveNextDueMileage.replace(/[^\d]/g, '')) : null,
     });
     if (mileageNum != null && mileageNum > vehicle.mileage) {
       updateVehicleMileage(vehicle.id, mileageNum);
     }
+    upsertMaintenanceReminder({ vehicleId: vehicle.id, title: serviceTypeDef(serviceType).label, category: serviceType, dueDate: effectiveNextDueDate || null, dueMileage: effectiveNextDueMileage ? Number(effectiveNextDueMileage.replace(/[^\d]/g, '')) : null });
     router.back();
   }
 
@@ -236,7 +241,7 @@ export default function AddServiceScreen() {
         </View>
 
         {error != null && <Text style={styles.error}>{error}</Text>}
-        <Button title="Save record" onPress={save} style={{ marginTop: spacing.sm }} />
+        <Button title="Save record" onPress={() => void save()} style={{ marginTop: spacing.sm }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
