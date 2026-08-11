@@ -33,7 +33,7 @@ export default function ForgotPasswordScreen() {
           </Text>
         ) : (
           <>
-            <Text style={styles.intro}>Enter your account email and we'll send a reset link.</Text>
+            <Text style={styles.intro}>Enter your account email and we&apos;ll send a reset link.</Text>
             <Field
               label="Email"
               placeholder="you@example.com"
