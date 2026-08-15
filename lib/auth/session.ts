@@ -1,11 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Session } from '@supabase/supabase-js';
+import { FunctionsHttpError, type Session } from '@supabase/supabase-js';
 import { create } from 'zustand';
+import { clearBoundUserId, ensureDatabaseOwnership } from '../db/binding';
+import { resetAllData } from '../db/database';
+import { identifyPurchasesUser } from '../monetization/purchases';
 import { getSupabase, isSupabaseConfigured } from '../supabase';
+import { runPostDeletionTeardown } from './deletion';
+import type { AuthStatus } from './ownership';
 
 const LOCAL_ONLY_KEY = 'glovebox.localOnly';
 
-export type AuthStatus = 'loading' | 'signedOut' | 'signedIn' | 'localOnly';
+export type { AuthStatus };
 
 type AuthState = {
   status: AuthStatus;
@@ -16,7 +21,20 @@ type AuthState = {
   sendPasswordReset: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   continueWithoutAccount: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
 };
+
+let authEpoch = 0;
+
+async function enterSignedIn(
+  session: Session,
+  set: (partial: { status: AuthStatus; session: Session | null }) => void,
+  epoch: number,
+): Promise<void> {
+  await ensureDatabaseOwnership(session.user.id);
+  if (epoch !== authEpoch) return;
+  set({ status: 'signedIn', session });
+}
 
 export const useAuth = create<AuthState>((set, get) => ({
   status: 'loading',
@@ -24,27 +42,30 @@ export const useAuth = create<AuthState>((set, get) => ({
 
   initialize: async () => {
     if (!isSupabaseConfigured) {
-      set({ status: 'localOnly', session: null });
+      set({ status: 'signedOut', session: null });
       return;
     }
     const supabase = getSupabase();
-    const [{ data }, localOnly] = await Promise.all([
-      supabase.auth.getSession(),
-      AsyncStorage.getItem(LOCAL_ONLY_KEY),
-    ]);
+    const { data } = await supabase.auth.getSession();
     if (data.session) {
-      set({ status: 'signedIn', session: data.session });
+      const epoch = ++authEpoch;
+      try {
+        await enterSignedIn(data.session, set, epoch);
+      } catch {
+        if (epoch === authEpoch) set({ status: 'signedOut', session: null });
+      }
     } else {
-      set({ status: localOnly === '1' ? 'localOnly' : 'signedOut', session: null });
+      set({ status: 'signedOut', session: null });
     }
     supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
-        set({ status: 'signedIn', session });
-      } else if (get().status === 'signedIn') {
-        // Session ended (sign-out or expiry); fall back to the local-only choice if made.
-        void AsyncStorage.getItem(LOCAL_ONLY_KEY).then((flag) => {
-          set({ status: flag === '1' ? 'localOnly' : 'signedOut', session: null });
+        const epoch = ++authEpoch;
+        void enterSignedIn(session, set, epoch).catch(() => {
+          if (epoch === authEpoch) set({ status: 'signedOut', session: null });
         });
+      } else if (get().status === 'signedIn') {
+        authEpoch += 1;
+        set({ status: 'signedOut', session: null });
       }
     });
   },
@@ -68,6 +89,8 @@ export const useAuth = create<AuthState>((set, get) => ({
   signOut: async () => {
     const { error } = await getSupabase().auth.signOut();
     if (error) throw new Error(error.message);
+    authEpoch += 1;
+    await identifyPurchasesUser(null);
     set({ status: 'signedOut', session: null });
     await AsyncStorage.removeItem(LOCAL_ONLY_KEY);
   },
@@ -76,9 +99,45 @@ export const useAuth = create<AuthState>((set, get) => ({
     await AsyncStorage.setItem(LOCAL_ONLY_KEY, '1');
     set({ status: 'localOnly' });
   },
+
+  deleteAccount: async () => {
+    if (!isSupabaseConfigured) {
+      throw new Error('Cloud account features are not available in this build.');
+    }
+    const { error } = await getSupabase().functions.invoke('delete-account', { method: 'POST' });
+    if (error) {
+      if (error instanceof FunctionsHttpError) {
+        const detail = await error.context
+          .json()
+          .then((b: { error?: string }) => b.error)
+          .catch(() => undefined);
+        throw new Error(detail ?? 'Could not delete account. Try again later.');
+      }
+      throw new Error('Could not delete account. Check your connection and try again.');
+    }
+
+    // Do not cancel the store subscription — Apple requires users to manage that themselves.
+    // Clear the session first so a later local-wipe failure cannot leave this JWT active.
+    authEpoch += 1;
+    await runPostDeletionTeardown({
+      clearSession: async () => {
+        try {
+          await getSupabase().auth.signOut({ scope: 'local' });
+        } finally {
+          set({ status: 'signedOut', session: null });
+        }
+      },
+      cleanupLocal: async () => {
+        await identifyPurchasesUser(null);
+        await AsyncStorage.removeItem(LOCAL_ONLY_KEY);
+        resetAllData();
+        await clearBoundUserId();
+      },
+    });
+  },
 }));
 
-/** Current user id, or null in local-only mode. */
+/** Current user id, or null when signed out. */
 export function currentUserId(): string | null {
   return useAuth.getState().session?.user.id ?? null;
 }

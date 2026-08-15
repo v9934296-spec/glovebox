@@ -1,7 +1,9 @@
 import * as Network from 'expo-network';
 import { AppState } from 'react-native';
 import { create } from 'zustand';
+import { canSyncAsUser } from '../auth/ownership';
 import { currentUserId } from '../auth/session';
+import { loadBoundUserId } from '../db/binding';
 import { bumpDataVersion, getDb, nowIso } from '../db/database';
 import { isSupabaseConfigured, getSupabase } from '../supabase';
 import { ensureLocalMedia, uploadRowMedia } from './media';
@@ -84,10 +86,11 @@ function getLocalRow(table: SyncTable, rowId: string): LocalRow | null {
 }
 
 /**
- * First sync for a user: everything already on the device (including rows
- * created before Phase 2 or while signed out) gets queued for push.
+ * First sync for a user: queue local rows that already belong to this
+ * authenticated, bound account. Must not run until ownership is verified.
  */
-function backfillIfNeeded(userId: string) {
+function backfillIfNeeded(userId: string, boundUserId: string | null) {
+  if (!canSyncAsUser(boundUserId, userId)) return;
   const key = `backfilled:${userId}`;
   if (getSyncState(key) === '1') return;
   for (const table of SYNC_TABLES) {
@@ -214,7 +217,9 @@ export async function syncNow(): Promise<void> {
   try {
     const network = await Network.getNetworkStateAsync();
     if (network.isConnected === false) return;
-    backfillIfNeeded(userId);
+    const boundUserId = await loadBoundUserId();
+    if (!canSyncAsUser(boundUserId, userId)) return;
+    backfillIfNeeded(userId, boundUserId);
     await pushQueue(userId);
     await pullChanges(userId);
     setSyncState('lastSyncedAt', nowIso());

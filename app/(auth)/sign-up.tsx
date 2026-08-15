@@ -1,8 +1,9 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text } from 'react-native';
+import { KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Text } from 'react-native';
 import { Button, Field } from '@/components/ui';
 import { useAuth } from '@/lib/auth/session';
+import { privacyUrl, termsUrl } from '@/lib/legal';
 import { palette, spacing, typography } from '@/lib/theme';
 
 export default function SignUpScreen() {
@@ -87,6 +88,25 @@ export default function SignUpScreen() {
           disabled={!email.trim() || !password || !confirm}
         />
         <Text style={styles.hint}>
+          By creating an account, you agree to the{' '}
+          {termsUrl ? (
+            <Text style={styles.legalLink} onPress={() => { if (termsUrl) void Linking.openURL(termsUrl); }}>
+              Terms of Use
+            </Text>
+          ) : (
+            'Terms of Use'
+          )}{' '}
+          and acknowledge the{' '}
+          {privacyUrl ? (
+            <Text style={styles.legalLink} onPress={() => { if (privacyUrl) void Linking.openURL(privacyUrl); }}>
+              Privacy Policy
+            </Text>
+          ) : (
+            'Privacy Policy'
+          )}
+          .
+        </Text>
+        <Text style={styles.hint}>
           Your vehicles and records on this device will be backed up to your account on first sync.
         </Text>
       </ScrollView>
@@ -104,6 +124,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.lg,
     lineHeight: 18,
+  },
+  legalLink: {
+    color: palette.accent.primary,
+    fontSize: typography.caption.size,
+    fontWeight: '600',
   },
   confirmTitle: {
     color: palette.text.primary,

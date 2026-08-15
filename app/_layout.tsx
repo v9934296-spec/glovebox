@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { canAccessApp } from '@/lib/auth/ownership';
 import { useAuth } from '@/lib/auth/session';
 import { getDb } from '@/lib/db/database';
 import { identifyPurchasesUser, useEntitlements } from '@/lib/monetization/purchases';
@@ -44,7 +45,7 @@ export default function RootLayout() {
     );
   }
 
-  const hasAppAccess = status === 'signedIn' || status === 'localOnly';
+  const hasAppAccess = canAccessApp(status);
 
   return (
     <>

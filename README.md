@@ -222,6 +222,58 @@ collaboration — both are single-owner-only for now (see Roadmap).
   status, synced via the existing queue (free, via Supabase Edge Function)
 - Settings: account & sync status, plan & upgrade, data reset
 
+## Production / App Store
+
+These steps cannot be completed from the repository alone.
+
+### Railway legal site
+
+1. Create a new Railway service from this repo.
+2. Set the service **root directory** to `legal-site`.
+3. Deploy. Railway must honor `PORT` (see `legal-site/railway.toml` and `npm start`).
+4. Generate a public domain.
+5. Set `EXPO_PUBLIC_LEGAL_BASE_URL` to that origin (for example `https://glovebox-legal.up.railway.app`).
+6. Confirm in a browser:
+   - `{origin}/privacy.html`
+   - `{origin}/terms.html`
+   - `{origin}/support.html`
+
+### EAS production environment
+
+Set these on the **preview** and **production** EAS environments before a store build:
+
+```text
+EXPO_PUBLIC_SUPABASE_URL
+EXPO_PUBLIC_SUPABASE_ANON_KEY
+EXPO_PUBLIC_REVENUECAT_IOS_KEY
+EXPO_PUBLIC_LEGAL_BASE_URL
+```
+
+Without the first three, the binary cannot sign in or sell Pro. Without the last, legal links stay hidden.
+
+### Supabase functions
+
+Deploy (or confirm already deployed):
+
+```bash
+supabase functions deploy delete-account
+supabase functions deploy ai
+supabase functions deploy vin
+```
+
+This README does not claim those deploys have been run.
+
+### App Store Connect
+
+- **Privacy Policy URL:** `{EXPO_PUBLIC_LEGAL_BASE_URL}/privacy.html`
+- **Terms of Use:** `{EXPO_PUBLIC_LEGAL_BASE_URL}/terms.html` (Apple’s standard EULA is also linked from that page)
+- **Support URL:** `https://<legal-domain>/support.html`
+- iPhone screenshots
+- Age rating
+- Auto-renewable subscription products, attached in RevenueCat to entitlement **`pro`**
+- App Review demo account (email + password)
+- App Privacy (nutrition labels): email, user-generated photos/content, purchases; disclose VIN lookups via NHTSA and Pro AI receipt/text processing via OpenAI
+
 ## Roadmap
 
 - Future — family sharing / community features, fleet-mode collaboration (deliberately

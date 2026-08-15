@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { PurchasesPackage } from 'react-native-purchases';
 import { Button, Card, Screen } from '@/components/ui';
+import { privacyUrl, termsUrl } from '@/lib/legal';
 import { PRO_FEATURES } from '@/lib/monetization/entitlements';
 import { useEntitlements } from '@/lib/monetization/purchases';
 import { palette, radius, spacing, typography } from '@/lib/theme';
@@ -112,6 +113,7 @@ export default function PaywallScreen() {
             <Text style={styles.legal}>
               Subscriptions renew automatically and can be cancelled anytime in your store account settings.
             </Text>
+            <LegalLinks />
           </View>
         ) : (
           <Card style={{ marginTop: spacing.xl }}>
@@ -122,8 +124,28 @@ export default function PaywallScreen() {
             </Text>
           </Card>
         )}
+        {!(status === 'ready' && packages.length > 0 && !isPro) && <LegalLinks />}
       </ScrollView>
     </Screen>
+  );
+}
+
+function LegalLinks() {
+  if (privacyUrl == null && termsUrl == null) return null;
+  return (
+    <Text style={styles.legalLinks}>
+      {termsUrl ? (
+        <Text style={styles.legalLink} onPress={() => { if (termsUrl) void Linking.openURL(termsUrl); }}>
+          Terms of Use
+        </Text>
+      ) : null}
+      {termsUrl && privacyUrl ? <Text style={styles.legal}>  ·  </Text> : null}
+      {privacyUrl ? (
+        <Text style={styles.legalLink} onPress={() => { if (privacyUrl) void Linking.openURL(privacyUrl); }}>
+          Privacy Policy
+        </Text>
+      ) : null}
+    </Text>
   );
 }
 
@@ -184,5 +206,14 @@ const styles = StyleSheet.create({
     fontSize: typography.caption.size,
     textAlign: 'center',
     lineHeight: typography.caption.lineHeight,
+  },
+  legalLinks: {
+    textAlign: 'center',
+    marginTop: spacing.md,
+  },
+  legalLink: {
+    color: palette.accent.primary,
+    fontSize: typography.caption.size,
+    fontWeight: '600',
   },
 });

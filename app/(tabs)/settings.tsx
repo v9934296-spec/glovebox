@@ -1,11 +1,12 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
-import React from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Screen, SectionHeader } from '@/components/ui';
 import { useAuth } from '@/lib/auth/session';
 import { resetAllData } from '@/lib/db/database';
 import { useVehicles } from '@/lib/db/hooks';
+import { privacyUrl, termsUrl } from '@/lib/legal';
 import { FREE_LIMITS } from '@/lib/monetization/entitlements';
 import { useEntitlements } from '@/lib/monetization/purchases';
 import { syncNow, useSyncStatus } from '@/lib/sync/engine';
@@ -15,9 +16,10 @@ import { palette, spacing, typography } from '@/lib/theme';
 export default function SettingsScreen() {
   const router = useRouter();
   const vehicles = useVehicles();
-  const { status, session, signOut } = useAuth();
+  const { status, session, signOut, deleteAccount } = useAuth();
   const { syncing, lastSyncedAt, pending, error } = useSyncStatus();
   const { status: purchasesStatus, isPro } = useEntitlements();
+  const [deleting, setDeleting] = useState(false);
 
   function confirmReset() {
     Alert.alert(
@@ -45,6 +47,49 @@ export default function SettingsScreen() {
     ]);
   }
 
+  function confirmDeleteAccount() {
+    Alert.alert(
+      'Delete account permanently?',
+      'This permanently deletes your Glovebox account and all cloud data (vehicles, service history, reminders, photos). This cannot be undone.\n\nDeleting your Glovebox account does not automatically cancel an active App Store subscription.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete forever',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert('Are you sure?', 'This is final. Your account and all synced data will be permanently removed.', [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Yes, delete everything',
+                style: 'destructive',
+                onPress: () => {
+                  if (deleting) return;
+                  void (async () => {
+                    setDeleting(true);
+                    try {
+                      await deleteAccount();
+                      Alert.alert(
+                        'Account deleted',
+                        'Your account and cloud data have been permanently removed.',
+                      );
+                    } catch (e: unknown) {
+                      Alert.alert(
+                        'Delete failed',
+                        e instanceof Error ? e.message : 'Try again later.',
+                      );
+                    } finally {
+                      setDeleting(false);
+                    }
+                  })();
+                },
+              },
+            ]);
+          },
+        },
+      ],
+    );
+  }
+
   return (
     <Screen style={{ padding: 0 }}>
       <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'] }}>
@@ -67,6 +112,18 @@ export default function SettingsScreen() {
               />
               <Button title="Sign out" variant="ghost" onPress={confirmSignOut} style={{ flex: 1 }} />
             </View>
+            <Button
+              title={deleting ? 'Deleting…' : 'Delete account'}
+              variant="danger"
+              loading={deleting}
+              disabled={deleting}
+              onPress={confirmDeleteAccount}
+              style={{ marginTop: spacing.lg }}
+            />
+            <Text style={styles.hint}>
+              Permanently deletes your account and cloud data. Deleting your Glovebox account does not
+              automatically cancel an active App Store subscription.
+            </Text>
           </>
         ) : isSupabaseConfigured ? (
           <>
@@ -121,11 +178,27 @@ export default function SettingsScreen() {
           </>
         )}
 
-        <SectionHeader title="Coming soon" />
-        <Card>
-          <Row label="Notifications" value="Soon" />
-          <Row label="PDF vehicle report" value="Phase 5" last />
-        </Card>
+        {(privacyUrl != null || termsUrl != null) && (
+          <>
+            <SectionHeader title="Legal" />
+            <Card>
+                  {privacyUrl != null && (
+                <LinkRow
+                  label="Privacy Policy"
+                  onPress={() => { if (privacyUrl) void Linking.openURL(privacyUrl); }}
+                  last={termsUrl == null}
+                />
+              )}
+              {termsUrl != null && (
+                <LinkRow
+                  label="Terms of Use"
+                  onPress={() => { if (termsUrl) void Linking.openURL(termsUrl); }}
+                  last
+                />
+              )}
+            </Card>
+          </>
+        )}
 
         <SectionHeader title="Data" />
         <Card>
@@ -153,6 +226,15 @@ function Row({ label, value, last }: { label: string; value: string; last?: bool
   );
 }
 
+function LinkRow({ label, onPress, last }: { label: string; onPress: () => void; last?: boolean }) {
+  return (
+    <Pressable onPress={onPress} style={[styles.row, !last && styles.rowBorder]}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      <Text style={styles.legalLink}>Open</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.sm },
   rowBorder: { borderBottomWidth: 1, borderBottomColor: palette.border.subtle },
@@ -172,4 +254,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing['2xl'],
   },
+  legalLink: { color: palette.accent.primary, fontSize: typography.body.size, fontWeight: '600' },
 });

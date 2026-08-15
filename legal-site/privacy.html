@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Glovebox Privacy Policy</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main>
+    <h1>Privacy Policy</h1>
+    <p class="muted">Last updated: August 14, 2026</p>
+    <p>
+      This policy describes how Glovebox (“we”, “the app”) handles information when you use the
+      Glovebox iOS application. We do not sell personal data.
+    </p>
+
+    <h2>Who this applies to</h2>
+    <p>
+      Glovebox requires an account. We are not directed at children under 13, and we do not
+      knowingly collect information from children under 13.
+    </p>
+
+    <h2>Information you provide</h2>
+    <ul>
+      <li><strong>Account.</strong> Email address and password, stored and authenticated by Supabase Auth.</li>
+      <li><strong>Vehicles.</strong> Details you enter such as nickname, make, model, year, trim, VIN, license plate, mileage, purchase date, and purchase price.</li>
+      <li><strong>Service records.</strong> Service type, date, mileage, cost, shop name, notes, and next-due information.</li>
+      <li><strong>Reminders.</strong> Titles, due dates or mileage, recurrence, and completion status.</li>
+      <li><strong>Photos.</strong> Vehicle photos and receipt photos you choose to attach.</li>
+    </ul>
+
+    <h2>Where it is stored</h2>
+    <ul>
+      <li><strong>On your device.</strong> A local SQLite cache holds your garage so the app works offline. The cache is bound to your account on that device.</li>
+      <li><strong>In the cloud.</strong> When you are signed in, Glovebox synchronizes vehicles, service records, and reminders to Supabase Postgres. Vehicle and receipt photos upload to a private Supabase Storage bucket (<code>glovebox-media</code>) under your user folder.</li>
+    </ul>
+
+    <h2>Features that send data to third parties</h2>
+    <p>These run only when you use the feature. Glovebox does not call these providers from the device directly; requests go through our Supabase Edge Functions.</p>
+    <ul>
+      <li><strong>VIN decode and recall checks.</strong> The VIN (or make, model, and year) is sent to our <code>vin</code> Edge Function, which queries NHTSA’s public vPIC and Recalls APIs. Decoded fields and recall results can be saved with the vehicle and synced.</li>
+      <li><strong>AI tools (Glovebox Pro).</strong> Receipt images and the text you submit for repair explanations or price checks are sent to our <code>ai</code> Edge Function, which calls OpenAI to return structured results. Do not submit information you do not want processed by that provider.</li>
+      <li><strong>Purchases.</strong> If you buy Glovebox Pro, Apple processes the payment. We use RevenueCat to read whether the <code>pro</code> entitlement is active. We do not receive your full payment-card number.</li>
+    </ul>
+
+    <h2>What we do not collect</h2>
+    <p>
+      Glovebox does not request contacts, precise location, microphone, or advertising identifiers.
+      We do not operate a third-party analytics or crash-reporting SDK in the current app.
+    </p>
+
+    <h2>How we use information</h2>
+    <p>
+      We use this information to provide the account, sync your garage across devices, show
+      maintenance and cost history, run VIN/recall and optional AI features you invoke, and
+      unlock Glovebox Pro. We do not sell personal data and we do not use it for advertising.
+    </p>
+
+    <h2>Retention and deletion</h2>
+    <p>
+      Cloud data is kept while your account exists. You can delete your account in Settings.
+      Deletion removes your Supabase Auth user, your synced vehicles, service records, and
+      reminders, and media stored under your folder in Supabase Storage. The on-device cache
+      is then wiped. Deleting your Glovebox account does not automatically cancel an active
+      App Store subscription; cancel that in your Apple ID subscription settings.
+    </p>
+    <p>
+      You can also erase the copy of data stored on this device without deleting the cloud
+      account (Settings → Erase all data).
+    </p>
+
+    <h2>Sharing</h2>
+    <p>
+      We share data with the processors named above (Supabase, NHTSA via the VIN function,
+      OpenAI via the AI function, Apple, and RevenueCat) solely to operate those features.
+      We may disclose information if required by law.
+    </p>
+
+    <h2>Contact</h2>
+    <p>
+      For privacy questions or deletion requests, contact the support address listed on the
+      Glovebox App Store listing.
+    </p>
+
+    <nav>
+      <a href="index.html">Legal home</a>
+      <a href="terms.html">Terms of Use</a>
+    </nav>
+    <footer>© Glovebox</footer>
+  </main>
+</body>
+</html>

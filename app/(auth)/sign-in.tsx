@@ -8,7 +8,7 @@ import { palette, spacing, typography } from '@/lib/theme';
 
 export default function SignInScreen() {
   const router = useRouter();
-  const { signIn, continueWithoutAccount } = useAuth();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -25,11 +25,6 @@ export default function SignInScreen() {
     } finally {
       setBusy(false);
     }
-  }
-
-  async function onSkip() {
-    await continueWithoutAccount();
-    router.replace('/');
   }
 
   return (
@@ -68,15 +63,8 @@ export default function SignInScreen() {
           <Link href="/(auth)/sign-up" style={styles.link}>
             Create account
           </Link>
-          <Link href="/(auth)/forgot-password" style={styles.link}>
-            Forgot password?
-          </Link>
         </View>
 
-        <Button title="Continue without account" variant="ghost" onPress={onSkip} style={{ marginTop: spacing.xl }} />
-        <Text style={styles.skipHint}>
-          Local-only mode keeps everything on this device. You can sign in later from Settings to back up and sync.
-        </Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -106,11 +94,4 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   link: { color: palette.accent.primary, fontSize: typography.caption.size, fontWeight: '600' },
-  skipHint: {
-    color: palette.text.tertiary,
-    fontSize: typography.caption.size,
-    textAlign: 'center',
-    marginTop: spacing.sm,
-    lineHeight: 18,
-  },
 });
