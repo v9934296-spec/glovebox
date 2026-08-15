@@ -14,7 +14,7 @@
       "backgroundColor": "#0D0F12"
     },
     "ios": {
-      "bundleIdentifier": "app.glovebox.mobile",
+      "bundleIdentifier": "com.glovebox.mobile",
       "supportsTablet": false,
       "buildNumber": "1",
       "infoPlist": {
@@ -24,7 +24,7 @@
       }
     },
     "android": {
-      "package": "app.glovebox.mobile",
+      "package": "com.glovebox.mobile",
       "versionCode": 1,
       "edgeToEdgeEnabled": true,
       "adaptiveIcon": {

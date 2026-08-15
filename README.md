@@ -125,7 +125,7 @@ All gating rules live in `lib/monetization/entitlements.ts`; screens call
 ### RevenueCat setup
 
 1. Create a project at [revenuecat.com](https://www.revenuecat.com) and add your
-   iOS/Android apps (bundle id `app.glovebox.mobile`).
+   iOS/Android apps (bundle id `com.glovebox.mobile`).
 2. Create an entitlement that unlocks Glovebox Pro. The app treats either identifier as Pro:
    **`pro`** (preferred) or **`Create a project called glovebox Pro`**. Attach Monthly,
    Yearly, and Lifetime products (`$rc_monthly`, `$rc_annual`, `$rc_lifetime`) to the
