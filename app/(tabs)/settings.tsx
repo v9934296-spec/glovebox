@@ -8,7 +8,7 @@ import { resetAllData } from '@/lib/db/database';
 import { useVehicles } from '@/lib/db/hooks';
 import { privacyUrl, termsUrl } from '@/lib/legal';
 import { FREE_LIMITS } from '@/lib/monetization/entitlements';
-import { useEntitlements } from '@/lib/monetization/purchases';
+import { presentCustomerCenter, useEntitlements } from '@/lib/monetization/purchases';
 import { syncNow, useSyncStatus } from '@/lib/sync/engine';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { palette, spacing, typography } from '@/lib/theme';
@@ -164,7 +164,27 @@ export default function SettingsScreen() {
           />
         </Card>
         {isPro ? (
-          <Text style={styles.hint}>Manage or cancel your subscription in your store account settings.</Text>
+          <>
+            <Button
+              title="Manage subscription"
+              variant="secondary"
+              onPress={() => {
+                void (async () => {
+                  const opened = await presentCustomerCenter();
+                  if (!opened) {
+                    Alert.alert(
+                      'Manage subscription',
+                      'Open your App Store account settings to manage or cancel Glovebox Pro.',
+                    );
+                  }
+                })();
+              }}
+              style={{ marginTop: spacing.md }}
+            />
+            <Text style={styles.hint}>
+              Manage or cancel through RevenueCat Customer Center, or in your store account settings.
+            </Text>
+          </>
         ) : (
           <>
             <Button

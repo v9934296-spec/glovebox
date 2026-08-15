@@ -1,4 +1,29 @@
-import { canAddVehicle, canAttachReceipt, canExportReport, canUseAi, FREE_LIMITS } from '../entitlements';
+import {
+  canAddVehicle,
+  canAttachReceipt,
+  canExportReport,
+  canUseAi,
+  FREE_LIMITS,
+  hasActiveProEntitlement,
+  PRO_ENTITLEMENT_ALIAS,
+  PRO_ENTITLEMENT_ID,
+} from '../entitlements';
+
+describe('hasActiveProEntitlement', () => {
+  it('unlocks Pro for the repo entitlement id', () => {
+    expect(hasActiveProEntitlement({ [PRO_ENTITLEMENT_ID]: {} })).toBe(true);
+  });
+
+  it('unlocks Pro for the RevenueCat dashboard alias', () => {
+    expect(hasActiveProEntitlement({ [PRO_ENTITLEMENT_ALIAS]: {} })).toBe(true);
+  });
+
+  it('does not unlock when neither identifier is active', () => {
+    expect(hasActiveProEntitlement({})).toBe(false);
+    expect(hasActiveProEntitlement(undefined)).toBe(false);
+    expect(hasActiveProEntitlement({ other: {} })).toBe(false);
+  });
+});
 
 describe('canAddVehicle', () => {
   it('allows free users under the vehicle limit', () => {

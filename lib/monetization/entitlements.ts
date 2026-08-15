@@ -7,6 +7,20 @@
 
 export const PRO_ENTITLEMENT_ID = 'pro';
 
+/** Alternate dashboard identifier from RevenueCat’s snippet; either unlocks Pro. */
+export const PRO_ENTITLEMENT_ALIAS = 'Create a project called glovebox Pro';
+
+/**
+ * True when CustomerInfo has Glovebox Pro via either entitlement identifier.
+ * Pure so it can be unit-tested without the native Purchases module.
+ */
+export function hasActiveProEntitlement(
+  active: Record<string, unknown> | null | undefined,
+): boolean {
+  if (active == null) return false;
+  return active[PRO_ENTITLEMENT_ID] != null || active[PRO_ENTITLEMENT_ALIAS] != null;
+}
+
 export const FREE_LIMITS = {
   /** Vehicles a free user can keep in the garage. */
   maxVehicles: 2,

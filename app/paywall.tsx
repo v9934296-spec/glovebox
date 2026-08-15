@@ -1,17 +1,21 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { PurchasesPackage } from 'react-native-purchases';
 import { Button, Card, Screen } from '@/components/ui';
 import { privacyUrl, termsUrl } from '@/lib/legal';
 import { PRO_FEATURES } from '@/lib/monetization/entitlements';
-import { useEntitlements } from '@/lib/monetization/purchases';
+import {
+  presentCustomerCenter,
+  presentRemotePaywall,
+  useEntitlements,
+} from '@/lib/monetization/purchases';
 import { palette, radius, spacing, typography } from '@/lib/theme';
 
 const PACKAGE_LABELS: Record<string, string> = {
   $rc_monthly: 'Monthly',
-  $rc_annual: 'Annual',
+  $rc_annual: 'Yearly',
   $rc_lifetime: 'Lifetime',
 };
 
@@ -23,6 +27,39 @@ export default function PaywallScreen() {
   const router = useRouter();
   const { status, isPro, packages, purchase, restore } = useEntitlements();
   const [busy, setBusy] = useState<string | null>(null);
+  const [useFallback, setUseFallback] = useState(false);
+  const presented = useRef(false);
+
+  useEffect(() => {
+    if (status !== 'ready' || isPro || presented.current) return;
+    presented.current = true;
+    void (async () => {
+      const result = await presentRemotePaywall();
+      if (result === 'unlocked') {
+        Alert.alert('Welcome to Pro', 'Everything is unlocked. Thanks for supporting Glovebox!');
+        router.back();
+        return;
+      }
+      if (result === 'unavailable') {
+        setUseFallback(true);
+      }
+    })();
+  }, [status, isPro, router]);
+
+  async function showRemotePaywall() {
+    setBusy('paywall');
+    try {
+      const result = await presentRemotePaywall();
+      if (result === 'unlocked') {
+        Alert.alert('Welcome to Pro', 'Everything is unlocked. Thanks for supporting Glovebox!');
+        router.back();
+      } else if (result === 'unavailable') {
+        setUseFallback(true);
+      }
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function buy(pkg: PurchasesPackage) {
     setBusy(pkg.identifier);
@@ -56,6 +93,23 @@ export default function PaywallScreen() {
     }
   }
 
+  async function openCustomerCenter() {
+    setBusy('center');
+    try {
+      const opened = await presentCustomerCenter();
+      if (!opened) {
+        Alert.alert(
+          'Manage subscription',
+          'Open your App Store account settings to manage or cancel Glovebox Pro.',
+        );
+      }
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const showFallbackPackages = useFallback && status === 'ready' && packages.length > 0 && !isPro;
+
   return (
     <Screen style={{ padding: 0 }}>
       <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'] }}>
@@ -87,8 +141,15 @@ export default function PaywallScreen() {
               <Ionicons name="checkmark-circle" size={20} color={palette.status.ok} />
               <Text style={styles.proActiveText}>Pro is active on this device. Enjoy!</Text>
             </View>
+            <Button
+              title="Manage subscription"
+              variant="secondary"
+              loading={busy === 'center'}
+              onPress={() => void openCustomerCenter()}
+              style={{ marginTop: spacing.md }}
+            />
           </Card>
-        ) : status === 'ready' && packages.length > 0 ? (
+        ) : showFallbackPackages ? (
           <View style={{ marginTop: spacing.xl, gap: spacing.md }}>
             {packages.map((pkg) => (
               <Pressable
@@ -115,16 +176,36 @@ export default function PaywallScreen() {
             </Text>
             <LegalLinks />
           </View>
-        ) : (
+        ) : status === 'loading' ? (
+          <Card style={{ marginTop: spacing.xl }}>
+            <Text style={styles.unavailableText}>Loading plans…</Text>
+          </Card>
+        ) : status === 'unavailable' ? (
           <Card style={{ marginTop: spacing.xl }}>
             <Text style={styles.unavailableText}>
-              {status === 'loading'
-                ? 'Loading plans…'
-                : 'Purchases are not available in this build. Glovebox Pro requires the app from the App Store or Play Store.'}
+              Purchases are not available in this build. Glovebox Pro requires the app from the App Store or Play Store.
             </Text>
           </Card>
+        ) : (
+          <View style={{ marginTop: spacing.xl, gap: spacing.md }}>
+            <Button
+              title="See plans"
+              loading={busy === 'paywall'}
+              onPress={() => void showRemotePaywall()}
+            />
+            <Button
+              title="Restore purchases"
+              variant="ghost"
+              loading={busy === 'restore'}
+              onPress={() => void restorePurchases()}
+            />
+            <Text style={styles.legal}>
+              Subscriptions renew automatically and can be cancelled anytime in your store account settings.
+            </Text>
+            <LegalLinks />
+          </View>
         )}
-        {!(status === 'ready' && packages.length > 0 && !isPro) && <LegalLinks />}
+        {isPro || status === 'unavailable' || status === 'loading' ? <LegalLinks /> : null}
       </ScrollView>
     </Screen>
   );

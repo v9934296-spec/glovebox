@@ -126,22 +126,26 @@ All gating rules live in `lib/monetization/entitlements.ts`; screens call
 
 1. Create a project at [revenuecat.com](https://www.revenuecat.com) and add your
    iOS/Android apps (bundle id `app.glovebox.mobile`).
-2. Create an entitlement with identifier **`pro`**, attach your subscription
-   products to it, and add them to the **current offering** (the paywall lists
-   whatever packages the current offering contains).
+2. Create an entitlement that unlocks Glovebox Pro. The app treats either identifier as Pro:
+   **`pro`** (preferred) or **`Create a project called glovebox Pro`**. Attach Monthly,
+   Yearly, and Lifetime products (`$rc_monthly`, `$rc_annual`, `$rc_lifetime`) to the
+   **current offering**, and add a RevenueCat Paywall on that offering in the dashboard.
 3. Add the public SDK keys to `.env`:
 
    ```bash
    EXPO_PUBLIC_REVENUECAT_IOS_KEY=appl_...
    EXPO_PUBLIC_REVENUECAT_ANDROID_KEY=goog_...
+   EXPO_PUBLIC_REVENUECAT_TEST_KEY=test_...   # Test Store only; never ship this in a store binary
    ```
 
 Without keys (or in Expo Go/web, where the native module is unavailable) the
-app stays on the free tier and the paywall explains that purchases aren't
-available in that build. When a user signs in, the RevenueCat identity is
-linked to the Supabase user id so Pro follows the account across devices.
-Note that `react-native-purchases` is a native module: use a development build
-(`pnpm ios` / `pnpm android`), not Expo Go, to test purchases.
+app stays on the free tier. In a development build the `/paywall` route presents
+the RevenueCat Paywall for the current offering (`RevenueCatUI.presentPaywall`);
+if that native UI is missing it falls back to an in-app Monthly / Yearly / Lifetime
+list. Pro subscribers can open Customer Center from Settings. When a user signs in,
+the RevenueCat identity is linked to the Supabase user id so Pro follows the account
+across devices. Use a development build (`pnpm ios` / `pnpm android`), not Expo Go,
+to test purchases.
 
 ## AI features (Phase 4)
 
