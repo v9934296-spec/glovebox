@@ -62,7 +62,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="vehicle/add" options={{ presentation: 'modal', title: 'Add vehicle' }} />
           <Stack.Screen name="vehicle/[id]" options={{ title: 'Vehicle' }} />
-          <Stack.Screen name="service/add" options={{ presentation: 'modal', title: 'Log service' }} />
+          <Stack.Screen name="service/add" options={{ presentation: 'modal', title: 'Add Service' }} />
           <Stack.Screen name="reminder/add" options={{ presentation: 'modal', title: 'New reminder' }} />
           <Stack.Screen name="ai/assistant" options={{ presentation: 'modal', title: 'AI assistant' }} />
           <Stack.Screen name="paywall" options={{ presentation: 'modal', title: 'Glovebox Pro' }} />

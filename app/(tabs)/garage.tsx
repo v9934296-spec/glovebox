@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Link, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import React from 'react';
 import { FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, DueBadge, EmptyState, Screen } from '@/components/ui';
+import { Button, Card, DueBadge, EmptyState, Screen, StatusBadge, healthTone } from '@/components/ui';
 import { useReminders, useServiceRecords, useVehicles } from '@/lib/db/hooks';
 import { dueSummary, reminderDueState, todayIso, type DueState } from '@/lib/domain/due';
 import { healthScore } from '@/lib/domain/healthScore';
@@ -31,29 +31,36 @@ function VehicleCard({ vehicle }: { vehicle: Vehicle }) {
     }
   }
 
+  const subtitle = `${vehicle.year} ${vehicle.make} ${vehicle.model}${vehicle.trim ? ` ${vehicle.trim}` : ''}`;
+
   return (
-    <Pressable onPress={() => router.push({ pathname: '/vehicle/[id]', params: { id: vehicle.id } })}>
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => router.push({ pathname: '/vehicle/[id]', params: { id: vehicle.id } })}
+    >
       <Card style={styles.vehicleCard}>
         <View style={styles.row}>
           {vehicle.photoUri ? (
             <Image source={{ uri: vehicle.photoUri }} style={styles.photo} />
           ) : (
             <View style={[styles.photo, styles.photoPlaceholder]}>
-              <Ionicons name="car-sport" size={28} color={palette.text.tertiary} />
+              <Ionicons name="car-sport" size={22} color={palette.text.tertiary} />
             </View>
           )}
-          <View style={{ flex: 1, marginLeft: spacing.md }}>
-            <Text style={styles.nickname}>{vehicle.nickname}</Text>
-            <Text style={styles.subtitle}>
-              {vehicle.year} {vehicle.make} {vehicle.model}
-              {vehicle.trim ? ` ${vehicle.trim}` : ''}
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.nickname} numberOfLines={1}>
+              {vehicle.nickname}
+            </Text>
+            <Text style={styles.subtitle} numberOfLines={1}>
+              {subtitle}
             </Text>
             <Text style={styles.mileage}>{vehicle.mileage.toLocaleString()} mi</Text>
           </View>
-          <View style={styles.healthPill}>
+          <View style={styles.healthCol}>
             <Text style={styles.healthValue}>{health.score}</Text>
-            <Text style={styles.healthLabel}>{health.label}</Text>
+            <StatusBadge label={health.label} tone={healthTone(health.label)} />
           </View>
+          <Ionicons name="chevron-forward" size={16} color={palette.text.tertiary} />
         </View>
         {nextDue && (
           <View style={styles.nextDueRow}>
@@ -89,52 +96,37 @@ export default function GarageScreen() {
       <FlatList
         data={vehicles}
         keyExtractor={(v) => v.id}
-        contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }}
+        contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.sm, paddingBottom: spacing['2xl'] }}
         renderItem={({ item }) => <VehicleCard vehicle={item} />}
-        ListFooterComponent={
-          <Link href="/vehicle/add" asChild>
-            <Pressable style={styles.addRow}>
-              <Ionicons name="add-circle-outline" size={20} color={palette.accent.primary} />
-              <Text style={styles.addText}>Add another vehicle</Text>
-            </Pressable>
-          </Link>
-        }
       />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  vehicleCard: { gap: spacing.md },
-  row: { flexDirection: 'row', alignItems: 'center' },
-  photo: { width: 64, height: 64, borderRadius: radius.md },
+  vehicleCard: { gap: spacing.md, paddingVertical: spacing.md, paddingHorizontal: spacing.md },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  photo: { width: 56, height: 56, borderRadius: radius.md },
   photoPlaceholder: {
     backgroundColor: palette.bg.surfaceRaised,
+    borderWidth: 1,
+    borderColor: palette.border.subtle,
     alignItems: 'center',
     justifyContent: 'center',
   },
   nickname: {
     color: palette.text.primary,
-    fontSize: typography.h3.size,
-    fontWeight: typography.h3.weight,
+    fontSize: typography.bodyEmphasis.size,
+    fontWeight: typography.bodyEmphasis.weight,
   },
-  subtitle: { color: palette.text.secondary, fontSize: typography.caption.size, marginTop: 2 },
-  mileage: { color: palette.text.tertiary, fontSize: typography.caption.size, marginTop: 2 },
-  healthPill: { alignItems: 'center', marginLeft: spacing.sm },
+  subtitle: { color: palette.text.secondary, fontSize: typography.meta.size, marginTop: 2 },
+  mileage: { color: palette.text.tertiary, fontSize: typography.meta.size, marginTop: 2 },
+  healthCol: { alignItems: 'flex-end', gap: 4 },
   healthValue: {
     color: palette.accent.primary,
-    fontSize: typography.h2.size,
-    fontWeight: typography.h2.weight,
+    fontSize: typography.h3.size,
+    fontWeight: '700',
   },
-  healthLabel: { color: palette.text.tertiary, fontSize: 10 },
   nextDueRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  nextDueText: { color: palette.text.secondary, fontSize: typography.caption.size, flex: 1 },
-  addRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.lg,
-  },
-  addText: { color: palette.accent.primary, fontSize: typography.bodyEmphasis.size, fontWeight: '600' },
+  nextDueText: { color: palette.text.secondary, fontSize: typography.meta.size, flex: 1 },
 });

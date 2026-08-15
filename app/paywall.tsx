@@ -23,6 +23,21 @@ function packageLabel(pkg: PurchasesPackage): string {
   return PACKAGE_LABELS[pkg.identifier] ?? pkg.product.title;
 }
 
+function isAnnual(pkg: PurchasesPackage): boolean {
+  return pkg.identifier === '$rc_annual';
+}
+
+function isMonthly(pkg: PurchasesPackage): boolean {
+  return pkg.identifier === '$rc_monthly';
+}
+
+function sortPackages(packages: PurchasesPackage[]): PurchasesPackage[] {
+  return [...packages].sort((a, b) => {
+    const rank = (pkg: PurchasesPackage) => (isAnnual(pkg) ? 0 : isMonthly(pkg) ? 1 : 2);
+    return rank(a) - rank(b);
+  });
+}
+
 export default function PaywallScreen() {
   const router = useRouter();
   const { status, isPro, packages, purchase, restore } = useEntitlements();
@@ -109,6 +124,8 @@ export default function PaywallScreen() {
   }
 
   const showFallbackPackages = useFallback && status === 'ready' && packages.length > 0 && !isPro;
+  const orderedPackages = sortPackages(packages);
+  const hasAnnualAndMonthly = orderedPackages.some(isAnnual) && orderedPackages.some(isMonthly);
 
   return (
     <Screen style={{ padding: 0 }}>
@@ -118,9 +135,7 @@ export default function PaywallScreen() {
             <Ionicons name="star" size={28} color={palette.accent.primary} />
           </View>
           <Text style={styles.heroTitle}>Glovebox Pro</Text>
-          <Text style={styles.heroSubtitle}>
-            The full toolbox for people who take care of their cars.
-          </Text>
+          <Text style={styles.heroSubtitle}>Everything about your car. Finally in one place.</Text>
         </View>
 
         <Card style={{ marginTop: spacing.xl }}>
@@ -151,20 +166,46 @@ export default function PaywallScreen() {
           </Card>
         ) : showFallbackPackages ? (
           <View style={{ marginTop: spacing.xl, gap: spacing.md }}>
-            {packages.map((pkg) => (
-              <Pressable
-                key={pkg.identifier}
-                onPress={() => void buy(pkg)}
-                disabled={busy !== null}
-                style={({ pressed }) => [styles.packageCard, pressed && { opacity: 0.85 }, busy !== null && { opacity: 0.5 }]}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.packageLabel}>{packageLabel(pkg)}</Text>
-                  <Text style={styles.packagePrice}>{pkg.product.priceString}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={palette.text.onAccent} />
-              </Pressable>
-            ))}
+            {orderedPackages.map((pkg) => {
+              const annual = isAnnual(pkg);
+              const monthly = isMonthly(pkg);
+              const emphasize = annual && hasAnnualAndMonthly;
+              return (
+                <Pressable
+                  key={pkg.identifier}
+                  onPress={() => void buy(pkg)}
+                  disabled={busy !== null}
+                  style={({ pressed }) => [
+                    styles.packageCard,
+                    emphasize && styles.packageCardBest,
+                    monthly && hasAnnualAndMonthly && styles.packageCardSecondary,
+                    pressed && { opacity: 0.85 },
+                    busy !== null && { opacity: 0.5 },
+                  ]}
+                >
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.packageLabelRow}>
+                      <Text style={[styles.packageLabel, emphasize && styles.packageLabelOnAccent]}>
+                        {packageLabel(pkg)}
+                      </Text>
+                      {emphasize && (
+                        <View style={styles.bestBadge}>
+                          <Text style={styles.bestBadgeText}>Best value</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={[styles.packagePrice, emphasize && styles.packageLabelOnAccent]}>
+                      {pkg.product.priceString}
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={18}
+                    color={emphasize ? palette.text.onAccent : palette.text.tertiary}
+                  />
+                </Pressable>
+              );
+            })}
             <Button
               title="Restore purchases"
               variant="ghost"
@@ -237,6 +278,8 @@ const styles = StyleSheet.create({
     height: 64,
     borderRadius: radius.pill,
     backgroundColor: palette.bg.surfaceRaised,
+    borderWidth: 1,
+    borderColor: palette.border.subtle,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -265,18 +308,44 @@ const styles = StyleSheet.create({
   packageCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: palette.accent.primary,
-    borderRadius: radius.lg,
+    backgroundColor: palette.bg.surfaceRaised,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: palette.border.subtle,
     padding: spacing.lg,
   },
+  packageCardBest: {
+    backgroundColor: palette.accent.primary,
+    borderColor: palette.accent.primary,
+  },
+  packageCardSecondary: {
+    backgroundColor: palette.bg.surface,
+  },
+  packageLabelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   packageLabel: {
-    color: palette.text.onAccent,
+    color: palette.text.primary,
     fontSize: typography.bodyEmphasis.size,
     fontWeight: typography.bodyEmphasis.weight,
   },
-  packagePrice: { color: palette.text.onAccent, fontSize: typography.caption.size, marginTop: 2, opacity: 0.8 },
+  packageLabelOnAccent: {
+    color: palette.text.onAccent,
+  },
+  packagePrice: { color: palette.text.secondary, fontSize: typography.caption.size, marginTop: 2 },
+  bestBadge: {
+    backgroundColor: palette.bg.app,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
+  bestBadgeText: {
+    color: palette.accent.primary,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
   proActiveRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  proActiveText: { color: palette.text.secondary, fontSize: typography.body.size },
+  proActiveText: { color: palette.text.secondary, fontSize: typography.body.size, flex: 1 },
   unavailableText: {
     color: palette.text.secondary,
     fontSize: typography.body.size,

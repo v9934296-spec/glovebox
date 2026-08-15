@@ -2,12 +2,25 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, DueBadge, EmptyState, Screen, SectionHeader, StatTile } from '@/components/ui';
+import {
+  Button,
+  Card,
+  DueBadge,
+  EmptyState,
+  IconCircle,
+  kindAccent,
+  ListRow,
+  MetricCard,
+  Screen,
+  SectionHeader,
+  serviceTypeIcon,
+  VehicleHeroCard,
+} from '@/components/ui';
 import { useAllServiceRecords, useReminders, useVehicles } from '@/lib/db/hooks';
 import { dueSummary, reminderDueState, todayIso, type DueState } from '@/lib/domain/due';
 import { formatMoney, summarizeExpenses } from '@/lib/domain/expenses';
 import { healthScore } from '@/lib/domain/healthScore';
-import { serviceTypeLabel } from '@/lib/domain/serviceTypes';
+import { serviceTypeDef, serviceTypeLabel } from '@/lib/domain/serviceTypes';
 import { palette, spacing, typography } from '@/lib/theme';
 
 export default function DashboardScreen() {
@@ -34,6 +47,13 @@ export default function DashboardScreen() {
 
   const expenses = useMemo(() => summarizeExpenses(allRecords, today), [allRecords, today]);
   const recentRecords = allRecords.slice(0, 3);
+  const hero = vehicles[0];
+  const heroHealth = useMemo(() => {
+    if (!hero) return null;
+    const records = allRecords.filter((r) => r.vehicleId === hero.id);
+    const reminders = activeReminders.filter((r) => r.vehicleId === hero.id);
+    return healthScore({ vehicle: hero, records, reminders, today });
+  }, [hero, allRecords, activeReminders, today]);
 
   if (vehicles.length === 0) {
     return (
@@ -50,10 +70,18 @@ export default function DashboardScreen() {
   return (
     <Screen style={{ padding: 0 }}>
       <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'] }}>
-        <View style={styles.statRow}>
-          <StatTile label="This month" value={formatMoney(expenses.monthTotal)} />
-          <StatTile label="This year" value={formatMoney(expenses.yearTotal)} />
-        </View>
+        {hero != null && heroHealth != null && (
+          <VehicleHeroCard
+            photoUri={hero.photoUri}
+            title={hero.nickname}
+            subtitle={`${hero.year} ${hero.make} ${hero.model}`}
+            meta={
+              <Text style={styles.heroMileage}>{hero.mileage.toLocaleString()} mi</Text>
+            }
+            health={{ score: heroHealth.score, label: heroHealth.label }}
+            cta={{ label: 'View Garage', onPress: () => router.push('/garage') }}
+          />
+        )}
 
         <SectionHeader
           title="Needs attention"
@@ -97,47 +125,37 @@ export default function DashboardScreen() {
           </View>
         )}
 
-        <SectionHeader title="Your garage" />
-        <View style={{ gap: spacing.sm }}>
-          {vehicles.map((vehicle) => {
-            const records = allRecords.filter((r) => r.vehicleId === vehicle.id);
-            const reminders = activeReminders.filter((r) => r.vehicleId === vehicle.id);
-            const health = healthScore({ vehicle, records, reminders, today });
-            return (
-              <Pressable
-                key={vehicle.id}
-                onPress={() => router.push({ pathname: '/vehicle/[id]', params: { id: vehicle.id } })}
-              >
-                <Card style={styles.vehicleRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.vehicleName}>{vehicle.nickname}</Text>
-                    <Text style={styles.vehicleMeta}>
-                      {vehicle.year} {vehicle.make} {vehicle.model} · {vehicle.mileage.toLocaleString()} mi
-                    </Text>
-                  </View>
-                  <View style={styles.healthPill}>
-                    <Text style={styles.healthValue}>{health.score}</Text>
-                    <Text style={styles.healthLabel}>{health.label}</Text>
-                  </View>
-                </Card>
-              </Pressable>
-            );
-          })}
+        <SectionHeader title="Overview" />
+        <View style={styles.statRow}>
+          <MetricCard label="Total Spent" value={formatMoney(expenses.lifetimeTotal)} />
+          <MetricCard label="Services" value={String(allRecords.length)} />
         </View>
 
         {recentRecords.length > 0 && (
           <>
-            <SectionHeader title="Recent activity" />
-            <Card>
-              {recentRecords.map((r, i) => (
-                <View key={r.id} style={[styles.activityRow, i < recentRecords.length - 1 && styles.activityBorder]}>
-                  <Text style={styles.activityType}>{serviceTypeLabel(r.serviceType)}</Text>
-                  <Text style={styles.activityMeta}>
-                    {r.date}
-                    {r.cost != null ? ` · ${formatMoney(r.cost)}` : ''}
-                  </Text>
-                </View>
-              ))}
+            <SectionHeader title="Recent services" />
+            <Card style={{ paddingVertical: spacing.sm, paddingHorizontal: spacing.md }}>
+              {recentRecords.map((r, i) => {
+                const kind = serviceTypeDef(r.serviceType).kind;
+                const color = kindAccent(kind);
+                const metaParts = [
+                  r.date,
+                  r.mileage != null ? `${r.mileage.toLocaleString()} mi` : null,
+                  r.cost != null ? formatMoney(r.cost) : null,
+                ].filter(Boolean);
+                return (
+                  <View
+                    key={r.id}
+                    style={[styles.rowPad, i < recentRecords.length - 1 && styles.rowDivider]}
+                  >
+                    <ListRow
+                      icon={<IconCircle icon={serviceTypeIcon(r.serviceType)} color={color} />}
+                      title={serviceTypeLabel(r.serviceType)}
+                      meta={metaParts.join(' · ')}
+                    />
+                  </View>
+                );
+              })}
             </Card>
           </>
         )}
@@ -160,27 +178,19 @@ const styles = StyleSheet.create({
   statRow: { flexDirection: 'row', gap: spacing.md },
   link: { color: palette.accent.primary, fontSize: typography.caption.size, fontWeight: '600' },
   allGood: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  allGoodText: { color: palette.text.secondary, fontSize: typography.body.size },
-  attentionCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  allGoodText: { color: palette.text.secondary, fontSize: typography.body.size, flex: 1 },
+  attentionCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
   attentionTitle: {
     color: palette.text.primary,
     fontSize: typography.bodyEmphasis.size,
     fontWeight: typography.bodyEmphasis.weight,
   },
-  attentionMeta: { color: palette.text.tertiary, fontSize: typography.caption.size, marginTop: 2 },
-  vehicleRow: { flexDirection: 'row', alignItems: 'center' },
-  vehicleName: {
-    color: palette.text.primary,
-    fontSize: typography.bodyEmphasis.size,
-    fontWeight: typography.bodyEmphasis.weight,
+  attentionMeta: { color: palette.text.tertiary, fontSize: typography.meta.size, marginTop: 2 },
+  heroMileage: { color: palette.text.secondary, fontSize: typography.body.size },
+  rowPad: { paddingVertical: spacing.sm },
+  rowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border.subtle,
   },
-  vehicleMeta: { color: palette.text.tertiary, fontSize: typography.caption.size, marginTop: 2 },
-  healthPill: { alignItems: 'center' },
-  healthValue: { color: palette.accent.primary, fontSize: typography.h3.size, fontWeight: typography.h3.weight },
-  healthLabel: { color: palette.text.tertiary, fontSize: 10 },
-  activityRow: { paddingVertical: spacing.sm },
-  activityBorder: { borderBottomWidth: 1, borderBottomColor: palette.border.subtle },
-  activityType: { color: palette.text.primary, fontSize: typography.body.size, fontWeight: '500' },
-  activityMeta: { color: palette.text.tertiary, fontSize: typography.caption.size, marginTop: 2 },
   quickActions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xl },
 });

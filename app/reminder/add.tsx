@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Chip, EmptyState, Field, SectionHeader } from '@/components/ui';
+import { Button, Card, Chip, EmptyState, Field, SectionHeader } from '@/components/ui';
 import { useVehicles } from '@/lib/db/hooks';
 import { createReminder } from '@/lib/db/reminderRepo';
 import { serviceTypeDef, SERVICE_TYPES } from '@/lib/domain/serviceTypes';
@@ -104,65 +104,80 @@ export default function AddReminderScreen() {
         )}
 
         <SectionHeader title="What for" />
-        <View style={styles.chipWrap}>
-          {SERVICE_TYPES.map((t) => (
-            <Chip key={t.id} label={t.label} selected={t.id === category} onPress={() => selectCategory(t.id)} />
-          ))}
-        </View>
-
-        <Field
-          label="Title"
-          placeholder="Oil change"
-          value={title}
-          onChangeText={(t) => {
-            setTitleTouched(true);
-            setTitle(t);
-          }}
-        />
+        <Card>
+          <View style={styles.chipWrap}>
+            {SERVICE_TYPES.map((t) => (
+              <Chip key={t.id} label={t.label} selected={t.id === category} onPress={() => selectCategory(t.id)} />
+            ))}
+          </View>
+          <Field
+            label="Title"
+            placeholder="Oil change"
+            value={title}
+            onChangeText={(t) => {
+              setTitleTouched(true);
+              setTitle(t);
+            }}
+            containerStyle={{ marginBottom: 0, marginTop: spacing.sm }}
+          />
+        </Card>
 
         <SectionHeader title="Due" />
-        <View style={styles.twoCol}>
-          <View style={{ flex: 1 }}>
-            <Field label="Due date" placeholder="YYYY-MM-DD" value={dueDate} onChangeText={setDueDate} />
+        <Card>
+          <View style={styles.twoCol}>
+            <View style={{ flex: 1 }}>
+              <Field
+                label="Due date"
+                placeholder="YYYY-MM-DD"
+                value={dueDate}
+                onChangeText={setDueDate}
+                containerStyle={{ marginBottom: 0 }}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Field
+                label="Due mileage"
+                placeholder={vehicle ? String(vehicle.mileage + 5000) : '85000'}
+                keyboardType="number-pad"
+                value={dueMileage}
+                onChangeText={setDueMileage}
+                containerStyle={{ marginBottom: 0 }}
+              />
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <Field
-              label="Due mileage"
-              placeholder={vehicle ? String(vehicle.mileage + 5000) : '85000'}
-              keyboardType="number-pad"
-              value={dueMileage}
-              onChangeText={setDueMileage}
-            />
-          </View>
-        </View>
+        </Card>
 
         <SectionHeader title="Repeats" />
-        <View style={styles.chipWrap}>
-          {RECURRENCE_OPTIONS.map((o) => (
-            <Chip key={o.id} label={o.label} selected={recurrence === o.id} onPress={() => setRecurrence(o.id)} />
-          ))}
-        </View>
-        {(recurrence === 'date' || recurrence === 'both') && (
-          <Field
-            label="Every N months"
-            placeholder="6"
-            keyboardType="number-pad"
-            value={intervalMonths}
-            onChangeText={setIntervalMonths}
-          />
-        )}
-        {(recurrence === 'mileage' || recurrence === 'both') && (
-          <Field
-            label="Every N miles"
-            placeholder="5000"
-            keyboardType="number-pad"
-            value={intervalMiles}
-            onChangeText={setIntervalMiles}
-          />
-        )}
+        <Card>
+          <View style={styles.chipWrap}>
+            {RECURRENCE_OPTIONS.map((o) => (
+              <Chip key={o.id} label={o.label} selected={recurrence === o.id} onPress={() => setRecurrence(o.id)} />
+            ))}
+          </View>
+          {(recurrence === 'date' || recurrence === 'both') && (
+            <Field
+              label="Every N months"
+              placeholder="6"
+              keyboardType="number-pad"
+              value={intervalMonths}
+              onChangeText={setIntervalMonths}
+              containerStyle={{ marginBottom: recurrence === 'both' ? spacing.md : 0, marginTop: spacing.sm }}
+            />
+          )}
+          {(recurrence === 'mileage' || recurrence === 'both') && (
+            <Field
+              label="Every N miles"
+              placeholder="5000"
+              keyboardType="number-pad"
+              value={intervalMiles}
+              onChangeText={setIntervalMiles}
+              containerStyle={{ marginBottom: 0, marginTop: spacing.sm }}
+            />
+          )}
+        </Card>
 
         {error != null && <Text style={styles.error}>{error}</Text>}
-        <Button title="Create reminder" onPress={save} style={{ marginTop: spacing.sm }} />
+        <Button title="Create reminder" onPress={save} style={{ marginTop: spacing.xl }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );

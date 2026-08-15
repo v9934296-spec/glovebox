@@ -1,31 +1,34 @@
 /**
- * Glovebox design tokens — dark-first, automotive amber accent.
+ * Glovebox design tokens — dark-mode OnFlow automotive palette.
  * All UI colors/spacing/type come from here; no hex literals in screens.
  */
 export const palette = {
   bg: {
-    app: '#0D0F12',
-    surface: '#16191E',
-    surfaceRaised: '#1E2229',
+    app: '#080A0C',
+    raised: '#0D0F12',
+    surface: '#111417',
+    surfaceRaised: '#171A1E',
   },
   border: {
-    subtle: '#262B33',
-    default: '#333A45',
+    subtle: '#22272D',
+    default: '#22272D',
   },
   text: {
-    primary: '#F2F4F7',
-    secondary: '#A8B0BC',
-    tertiary: '#6B7280',
-    onAccent: '#14100A',
+    primary: '#F7F7F7',
+    secondary: '#A7ADB5',
+    tertiary: '#747B84',
+    onAccent: '#080A0C',
   },
   accent: {
-    primary: '#F5A524',
-    primaryPressed: '#D98F16',
+    primary: '#54FF00',
+    primaryPressed: '#46D400',
+    danger: '#FF0044',
+    dangerPressed: '#CC0036',
   },
   status: {
-    ok: '#34D399',
+    ok: '#54FF00',
     dueSoon: '#FBBF24',
-    overdue: '#F87171',
+    overdue: '#FF0044',
   },
 } as const;
 
@@ -43,16 +46,21 @@ export const radius = {
   sm: 6,
   md: 10,
   lg: 14,
+  xl: 16,
+  hero: 18,
   pill: 999,
 } as const;
 
 export const typography = {
-  h1: { size: 28, weight: '700', lineHeight: 34 },
+  hero: { size: 26, weight: '700', lineHeight: 32 },
+  h1: { size: 24, weight: '700', lineHeight: 30 },
   h2: { size: 22, weight: '700', lineHeight: 28 },
   h3: { size: 18, weight: '600', lineHeight: 24 },
+  metric: { size: 26, weight: '700', lineHeight: 32 },
   body: { size: 15, weight: '400', lineHeight: 21 },
   bodyEmphasis: { size: 15, weight: '600', lineHeight: 21 },
   caption: { size: 13, weight: '400', lineHeight: 18 },
+  meta: { size: 12, weight: '400', lineHeight: 16 },
   overline: { size: 11, weight: '600', lineHeight: 14, letterSpacing: 1.2 },
 } as const;
 

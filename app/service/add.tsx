@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Chip, EmptyState, Field, SectionHeader } from '@/components/ui';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Button, Card, Chip, EmptyState, Field, PhotoTile, SectionHeader } from '@/components/ui';
 import { aiAvailability, scanReceipt } from '@/lib/ai/client';
 import { isEmptyScan } from '@/lib/ai/parse';
 import { useVehicles } from '@/lib/db/hooks';
@@ -13,7 +13,10 @@ import { addMonthsIso, todayIso } from '@/lib/domain/due';
 import { SERVICE_TYPES, serviceTypeDef } from '@/lib/domain/serviceTypes';
 import { canAttachReceipt, canUseAi } from '@/lib/monetization/entitlements';
 import { useIsPro } from '@/lib/monetization/purchases';
-import { palette, radius, spacing, typography } from '@/lib/theme';
+import { palette, spacing, typography } from '@/lib/theme';
+
+const fieldGap = { marginBottom: spacing.md } as const;
+const fieldLast = { marginBottom: 0 } as const;
 
 export default function AddServiceScreen() {
   const router = useRouter();
@@ -139,6 +142,21 @@ export default function AddServiceScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Stack.Screen
+        options={{
+          title: 'Add Service',
+          headerLeft: () => (
+            <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={8} style={{ paddingHorizontal: spacing.xs }}>
+              <Text style={styles.headerCancel}>Cancel</Text>
+            </Pressable>
+          ),
+          headerRight: () => (
+            <Pressable accessibilityRole="button" onPress={save} hitSlop={8} style={{ paddingHorizontal: spacing.xs }}>
+              <Text style={styles.headerSave}>Save</Text>
+            </Pressable>
+          ),
+        }}
+      />
       <ScrollView
         style={styles.screen}
         contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'] }}
@@ -156,87 +174,105 @@ export default function AddServiceScreen() {
         )}
 
         <SectionHeader title="Service type" />
-        <View style={styles.chipWrap}>
-          {SERVICE_TYPES.map((t) => (
-            <Chip key={t.id} label={t.label} selected={t.id === serviceType} onPress={() => setServiceType(t.id)} />
-          ))}
-        </View>
+        <Card>
+          <View style={styles.chipWrap}>
+            {SERVICE_TYPES.map((t) => (
+              <Chip key={t.id} label={t.label} selected={t.id === serviceType} onPress={() => setServiceType(t.id)} />
+            ))}
+          </View>
+        </Card>
 
         <SectionHeader title="Details" />
-        <View style={styles.twoCol}>
-          <View style={{ flex: 1 }}>
-            <Field label="Date" placeholder="YYYY-MM-DD" value={date} onChangeText={setDate} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Field label="Mileage" placeholder="82000" keyboardType="number-pad" value={mileage} onChangeText={setMileage} />
-          </View>
-        </View>
-        <View style={styles.twoCol}>
-          <View style={{ flex: 1 }}>
-            <Field label="Cost" placeholder="79.99" keyboardType="decimal-pad" value={cost} onChangeText={setCost} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Field label="Shop / mechanic" placeholder="Joe's Auto" value={shopName} onChangeText={setShopName} />
-          </View>
-        </View>
-        <Field label="Notes" placeholder="Parts used, what was done…" value={notes} onChangeText={setNotes} multiline />
+        <Card>
+          <Field label="Date" placeholder="YYYY-MM-DD" value={date} onChangeText={setDate} containerStyle={fieldGap} />
+          <Field
+            label="Mileage"
+            placeholder="82000"
+            keyboardType="number-pad"
+            value={mileage}
+            onChangeText={setMileage}
+            containerStyle={fieldGap}
+          />
+          <Field
+            label="Cost"
+            placeholder="79.99"
+            keyboardType="decimal-pad"
+            value={cost}
+            onChangeText={setCost}
+            containerStyle={fieldGap}
+          />
+          <Field
+            label="Shop"
+            placeholder="Joe's Auto"
+            value={shopName}
+            onChangeText={setShopName}
+            containerStyle={fieldGap}
+          />
+          <Field
+            label="Notes"
+            placeholder="Parts used, what was done…"
+            value={notes}
+            onChangeText={setNotes}
+            multiline
+            containerStyle={fieldLast}
+          />
+        </Card>
 
-        <Pressable onPress={pickReceipt} style={styles.receiptRow}>
-          {receiptUri ? (
-            <Image source={{ uri: receiptUri }} style={styles.receiptThumb} />
-          ) : (
-            <Ionicons name="receipt-outline" size={20} color={palette.accent.primary} />
-          )}
-          <Text style={styles.receiptText}>{receiptUri ? 'Change receipt photo' : 'Attach receipt photo'}</Text>
-          {!isPro && (
-            <View style={styles.proBadge}>
-              <Text style={styles.proBadgeText}>PRO</Text>
-            </View>
-          )}
-        </Pressable>
-
+        <SectionHeader title="Receipt" />
+        <PhotoTile
+          uri={receiptUri}
+          emptyLabel={isPro ? 'Add photo' : 'Add photo · Pro'}
+          emptyIcon="receipt-outline"
+          onPress={() => void pickReceipt()}
+          height={180}
+        />
         {receiptUri != null && (
-          <Pressable onPress={() => void scanAttachedReceipt()} disabled={scanning} style={styles.receiptRow}>
+          <Pressable onPress={() => void scanAttachedReceipt()} disabled={scanning} style={styles.scanRow}>
             {scanning ? (
               <ActivityIndicator size="small" color={palette.accent.primary} />
             ) : (
-              <Ionicons name="sparkles-outline" size={20} color={palette.accent.primary} />
+              <Ionicons name="sparkles-outline" size={18} color={palette.accent.primary} />
             )}
-            <Text style={styles.receiptText}>{scanning ? 'Reading receipt…' : 'Scan receipt to fill this form'}</Text>
+            <Text style={styles.scanText}>{scanning ? 'Reading receipt…' : 'Scan receipt to fill this form'}</Text>
           </Pressable>
         )}
 
-        <SectionHeader title="Next due (prefilled from service type)" />
-        <View style={styles.twoCol}>
-          <View style={{ flex: 1 }}>
-            <Field
-              label="Next due date"
-              placeholder="YYYY-MM-DD"
-              value={effectiveNextDueDate}
-              onChangeText={(t) => {
-                setNextDueTouched(true);
-                setNextDueDate(t);
-                setNextDueMileage(effectiveNextDueMileage);
-              }}
-            />
+        <SectionHeader title="Next due" />
+        <Card>
+          <Text style={styles.nextDueHint}>Prefills from the service type. Edit if this job is on a different interval.</Text>
+          <View style={styles.twoCol}>
+            <View style={{ flex: 1 }}>
+              <Field
+                label="Next due date"
+                placeholder="YYYY-MM-DD"
+                value={effectiveNextDueDate}
+                onChangeText={(t) => {
+                  setNextDueTouched(true);
+                  setNextDueDate(t);
+                  setNextDueMileage(effectiveNextDueMileage);
+                }}
+                containerStyle={fieldLast}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Field
+                label="Next due mileage"
+                placeholder="87000"
+                keyboardType="number-pad"
+                value={effectiveNextDueMileage}
+                onChangeText={(t) => {
+                  setNextDueTouched(true);
+                  setNextDueMileage(t);
+                  setNextDueDate(effectiveNextDueDate);
+                }}
+                containerStyle={fieldLast}
+              />
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <Field
-              label="Next due mileage"
-              placeholder="87000"
-              keyboardType="number-pad"
-              value={effectiveNextDueMileage}
-              onChangeText={(t) => {
-                setNextDueTouched(true);
-                setNextDueMileage(t);
-                setNextDueDate(effectiveNextDueDate);
-              }}
-            />
-          </View>
-        </View>
+        </Card>
 
         {error != null && <Text style={styles.error}>{error}</Text>}
-        <Button title="Save record" onPress={save} style={{ marginTop: spacing.sm }} />
+        <Button title="Save record" onPress={save} style={{ marginTop: spacing.xl }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -246,26 +282,20 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.bg.app },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap' },
   twoCol: { flexDirection: 'row', gap: spacing.md },
-  receiptRow: {
+  headerCancel: { color: palette.text.secondary, fontSize: typography.body.size },
+  headerSave: { color: palette.accent.primary, fontSize: typography.bodyEmphasis.size, fontWeight: '700' },
+  scanRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    marginTop: spacing.md,
     paddingVertical: spacing.sm,
   },
-  receiptThumb: { width: 40, height: 40, borderRadius: radius.sm },
-  receiptText: { color: palette.accent.primary, fontSize: typography.body.size, fontWeight: '500' },
-  proBadge: {
-    borderWidth: 1,
-    borderColor: palette.accent.primary,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 1,
+  scanText: { color: palette.accent.primary, fontSize: typography.body.size, fontWeight: '500' },
+  nextDueHint: {
+    color: palette.text.tertiary,
+    fontSize: typography.meta.size,
+    marginBottom: spacing.md,
   },
-  proBadgeText: {
-    color: palette.accent.primary,
-    fontSize: typography.overline.size,
-    fontWeight: typography.overline.weight,
-    letterSpacing: typography.overline.letterSpacing,
-  },
-  error: { color: palette.status.overdue, fontSize: typography.caption.size, marginBottom: spacing.sm },
+  error: { color: palette.status.overdue, fontSize: typography.caption.size, marginTop: spacing.md },
 });
