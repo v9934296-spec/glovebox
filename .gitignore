@@ -39,3 +39,9 @@ yarn-error.*
 
 # Tests
 coverage/
+
+# Local dumps / scratch (not part of the app)
+files/
+files.zip
+repomix-output.xml
+supabase/.temp/
