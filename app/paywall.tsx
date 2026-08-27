@@ -43,6 +43,7 @@ export default function PaywallScreen() {
   const { status, isPro, packages, purchase, restore } = useEntitlements();
   const [busy, setBusy] = useState<string | null>(null);
   const [useFallback, setUseFallback] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const presented = useRef(false);
 
   useEffect(() => {
@@ -125,27 +126,22 @@ export default function PaywallScreen() {
 
   const showFallbackPackages = useFallback && status === 'ready' && packages.length > 0 && !isPro;
   const orderedPackages = sortPackages(packages);
-  const hasAnnualAndMonthly = orderedPackages.some(isAnnual) && orderedPackages.some(isMonthly);
 
   return (
     <Screen style={{ padding: 0 }}>
       <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'] }}>
         <View style={styles.hero}>
-          <View style={styles.heroIcon}>
-            <Ionicons name="star" size={28} color={palette.accent.primary} />
-          </View>
           <Text style={styles.heroTitle}>Glovebox Pro</Text>
-          <Text style={styles.heroSubtitle}>Everything about your car. Finally in one place.</Text>
+          <Text style={styles.heroSubtitle}>
+            Unlimited vehicles, AI help, receipts, and PDF history.
+          </Text>
         </View>
 
         <Card style={{ marginTop: spacing.xl }}>
           {PRO_FEATURES.map((f, i) => (
             <View key={f.title} style={[styles.featureRow, i < PRO_FEATURES.length - 1 && styles.featureBorder]}>
-              <Ionicons name="checkmark-circle" size={20} color={palette.status.ok} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.featureTitle}>{f.title}</Text>
-                <Text style={styles.featureDetail}>{f.detail}</Text>
-              </View>
+              <Ionicons name="checkmark" size={18} color={palette.status.ok} />
+              <Text style={styles.featureTitle}>{f.title}</Text>
             </View>
           ))}
         </Card>
@@ -167,45 +163,28 @@ export default function PaywallScreen() {
         ) : showFallbackPackages ? (
           <View style={{ marginTop: spacing.xl, gap: spacing.md }}>
             {orderedPackages.map((pkg) => {
-              const annual = isAnnual(pkg);
-              const monthly = isMonthly(pkg);
-              const emphasize = annual && hasAnnualAndMonthly;
+              const selected = selectedId === pkg.identifier;
               return (
                 <Pressable
                   key={pkg.identifier}
-                  onPress={() => void buy(pkg)}
+                  onPress={() => setSelectedId(pkg.identifier)}
                   disabled={busy !== null}
-                  style={({ pressed }) => [
-                    styles.packageCard,
-                    emphasize && styles.packageCardBest,
-                    monthly && hasAnnualAndMonthly && styles.packageCardSecondary,
-                    pressed && { opacity: 0.85 },
-                    busy !== null && { opacity: 0.5 },
-                  ]}
+                  style={[styles.packageCard, selected && styles.packageCardSelected, busy !== null && { opacity: 0.5 }]}
                 >
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.packageLabelRow}>
-                      <Text style={[styles.packageLabel, emphasize && styles.packageLabelOnAccent]}>
-                        {packageLabel(pkg)}
-                      </Text>
-                      {emphasize && (
-                        <View style={styles.bestBadge}>
-                          <Text style={styles.bestBadgeText}>Best value</Text>
-                        </View>
-                      )}
-                    </View>
-                    <Text style={[styles.packagePrice, emphasize && styles.packageLabelOnAccent]}>
-                      {pkg.product.priceString}
-                    </Text>
-                  </View>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={18}
-                    color={emphasize ? palette.text.onAccent : palette.text.tertiary}
-                  />
+                  <Text style={styles.packageLabel}>{packageLabel(pkg)}</Text>
+                  <Text style={styles.packagePrice}>{pkg.product.priceString}</Text>
                 </Pressable>
               );
             })}
+            <Button
+              title="Continue"
+              disabled={selectedId == null || busy !== null}
+              loading={busy != null && busy !== 'restore'}
+              onPress={() => {
+                const pkg = orderedPackages.find((p) => p.identifier === selectedId);
+                if (pkg) void buy(pkg);
+              }}
+            />
             <Button
               title="Restore purchases"
               variant="ghost"
@@ -273,21 +252,11 @@ function LegalLinks() {
 
 const styles = StyleSheet.create({
   hero: { alignItems: 'center', marginTop: spacing.lg },
-  heroIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.pill,
-    backgroundColor: palette.bg.surfaceRaised,
-    borderWidth: 1,
-    borderColor: palette.border.subtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   heroTitle: {
     color: palette.text.primary,
-    fontSize: typography.h1.size,
-    fontWeight: typography.h1.weight,
-    marginTop: spacing.md,
+    fontSize: typography.display.size,
+    fontWeight: typography.display.weight,
+    lineHeight: typography.display.lineHeight,
   },
   heroSubtitle: {
     color: palette.text.secondary,
@@ -303,47 +272,28 @@ const styles = StyleSheet.create({
     color: palette.text.primary,
     fontSize: typography.bodyEmphasis.size,
     fontWeight: typography.bodyEmphasis.weight,
+    flex: 1,
   },
-  featureDetail: { color: palette.text.tertiary, fontSize: typography.caption.size, marginTop: 2 },
   packageCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: palette.bg.surfaceRaised,
-    borderRadius: radius.xl,
+    justifyContent: 'space-between',
+    backgroundColor: palette.bg.surface,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: palette.border.subtle,
     padding: spacing.lg,
   },
-  packageCardBest: {
-    backgroundColor: palette.accent.primary,
+  packageCardSelected: {
+    backgroundColor: palette.accent.soft,
     borderColor: palette.accent.primary,
   },
-  packageCardSecondary: {
-    backgroundColor: palette.bg.surface,
-  },
-  packageLabelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   packageLabel: {
     color: palette.text.primary,
     fontSize: typography.bodyEmphasis.size,
     fontWeight: typography.bodyEmphasis.weight,
   },
-  packageLabelOnAccent: {
-    color: palette.text.onAccent,
-  },
-  packagePrice: { color: palette.text.secondary, fontSize: typography.caption.size, marginTop: 2 },
-  bestBadge: {
-    backgroundColor: palette.bg.app,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-  },
-  bestBadgeText: {
-    color: palette.accent.primary,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
+  packagePrice: { color: palette.text.secondary, fontSize: typography.body.size },
   proActiveRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   proActiveText: { color: palette.text.secondary, fontSize: typography.body.size, flex: 1 },
   unavailableText: {

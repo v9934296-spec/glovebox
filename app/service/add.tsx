@@ -3,7 +3,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, Chip, EmptyState, Field, PhotoTile, SectionHeader } from '@/components/ui';
+import { Button, Chip, EmptyState, Field, PhotoTile, SectionLabel } from '@/components/ui';
 import { aiAvailability, scanReceipt } from '@/lib/ai/client';
 import { isEmptyScan } from '@/lib/ai/parse';
 import { useVehicles } from '@/lib/db/hooks';
@@ -15,7 +15,6 @@ import { canAttachReceipt, canUseAi } from '@/lib/monetization/entitlements';
 import { useIsPro } from '@/lib/monetization/purchases';
 import { palette, spacing, typography } from '@/lib/theme';
 
-const fieldGap = { marginBottom: spacing.md } as const;
 const fieldLast = { marginBottom: 0 } as const;
 
 export default function AddServiceScreen() {
@@ -159,12 +158,12 @@ export default function AddServiceScreen() {
       />
       <ScrollView
         style={styles.screen}
-        contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'] }}
+        contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'], gap: spacing.xl }}
         keyboardShouldPersistTaps="handled"
       >
         {vehicles.length > 1 && (
           <>
-            <SectionHeader title="Vehicle" />
+            <SectionLabel title="Vehicle" />
             <View style={styles.chipWrap}>
               {vehicles.map((v) => (
                 <Chip key={v.id} label={v.nickname} selected={v.id === vehicleId} onPress={() => setVehicleId(v.id)} />
@@ -173,106 +172,125 @@ export default function AddServiceScreen() {
           </>
         )}
 
-        <SectionHeader title="Service type" />
-        <Card>
-          <View style={styles.chipWrap}>
-            {SERVICE_TYPES.map((t) => (
-              <Chip key={t.id} label={t.label} selected={t.id === serviceType} onPress={() => setServiceType(t.id)} />
-            ))}
+        <SectionLabel title="What" />
+        <View style={styles.chipWrap}>
+          {SERVICE_TYPES.map((t) => (
+            <Chip key={t.id} label={t.label} selected={t.id === serviceType} onPress={() => setServiceType(t.id)} />
+          ))}
+        </View>
+
+        <SectionLabel title="Details" />
+        <View style={styles.twoCol}>
+          <View style={{ flex: 1 }}>
+            <Field label="Date" placeholder="YYYY-MM-DD" value={date} onChangeText={setDate} containerStyle={fieldLast} />
           </View>
-        </Card>
-
-        <SectionHeader title="Details" />
-        <Card>
-          <Field label="Date" placeholder="YYYY-MM-DD" value={date} onChangeText={setDate} containerStyle={fieldGap} />
-          <Field
-            label="Mileage"
-            placeholder="82000"
-            keyboardType="number-pad"
-            value={mileage}
-            onChangeText={setMileage}
-            containerStyle={fieldGap}
-          />
-          <Field
-            label="Cost"
-            placeholder="79.99"
-            keyboardType="decimal-pad"
-            value={cost}
-            onChangeText={setCost}
-            containerStyle={fieldGap}
-          />
-          <Field
-            label="Shop"
-            placeholder="Joe's Auto"
-            value={shopName}
-            onChangeText={setShopName}
-            containerStyle={fieldGap}
-          />
-          <Field
-            label="Notes"
-            placeholder="Parts used, what was done…"
-            value={notes}
-            onChangeText={setNotes}
-            multiline
-            containerStyle={fieldLast}
-          />
-        </Card>
-
-        <SectionHeader title="Receipt" />
-        <PhotoTile
-          uri={receiptUri}
-          emptyLabel={isPro ? 'Add photo' : 'Add photo · Pro'}
-          emptyIcon="receipt-outline"
-          onPress={() => void pickReceipt()}
-          height={180}
+          <View style={{ flex: 1 }}>
+            <Field
+              label="Mileage"
+              placeholder="82000"
+              keyboardType="number-pad"
+              value={mileage}
+              onChangeText={setMileage}
+              containerStyle={fieldLast}
+            />
+          </View>
+        </View>
+        <View style={[styles.twoCol, { marginTop: spacing.md }]}>
+          <View style={{ flex: 1 }}>
+            <Field
+              label="Cost"
+              placeholder="79.99"
+              keyboardType="decimal-pad"
+              value={cost}
+              onChangeText={setCost}
+              containerStyle={fieldLast}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Field
+              label="Shop"
+              placeholder="Joe's Auto"
+              value={shopName}
+              onChangeText={setShopName}
+              containerStyle={fieldLast}
+            />
+          </View>
+        </View>
+        <Field
+          label="Notes"
+          placeholder="Parts used, what was done…"
+          value={notes}
+          onChangeText={setNotes}
+          multiline
+          containerStyle={{ marginTop: spacing.md, marginBottom: 0 }}
         />
-        {receiptUri != null && (
-          <Pressable onPress={() => void scanAttachedReceipt()} disabled={scanning} style={styles.scanRow}>
-            {scanning ? (
-              <ActivityIndicator size="small" color={palette.accent.primary} />
-            ) : (
-              <Ionicons name="sparkles-outline" size={18} color={palette.accent.primary} />
+
+        <SectionLabel title="Receipt" />
+        {isPro ? (
+          <>
+            <PhotoTile
+              uri={receiptUri}
+              emptyLabel="Add photo"
+              emptyIcon="receipt-outline"
+              onPress={() => void pickReceipt()}
+              height={160}
+            />
+            {receiptUri != null && (
+              <Pressable onPress={() => void scanAttachedReceipt()} disabled={scanning} style={styles.scanRow}>
+                {scanning ? (
+                  <ActivityIndicator size="small" color={palette.accent.primary} />
+                ) : (
+                  <Text style={styles.scanText}>Scan receipt</Text>
+                )}
+              </Pressable>
             )}
-            <Text style={styles.scanText}>{scanning ? 'Reading receipt…' : 'Scan receipt to fill this form'}</Text>
+          </>
+        ) : (
+          <Pressable
+            onPress={() => router.push('/paywall')}
+            style={styles.proLockRow}
+          >
+            <Ionicons name="lock-closed-outline" size={18} color={palette.text.tertiary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.proLockTitle}>Receipt photo</Text>
+              <Text style={styles.proLockMeta}>Pro</Text>
+            </View>
           </Pressable>
         )}
 
-        <SectionHeader title="Next due" />
-        <Card>
-          <Text style={styles.nextDueHint}>Prefills from the service type. Edit if this job is on a different interval.</Text>
-          <View style={styles.twoCol}>
-            <View style={{ flex: 1 }}>
-              <Field
-                label="Next due date"
-                placeholder="YYYY-MM-DD"
-                value={effectiveNextDueDate}
-                onChangeText={(t) => {
-                  setNextDueTouched(true);
-                  setNextDueDate(t);
-                  setNextDueMileage(effectiveNextDueMileage);
-                }}
-                containerStyle={fieldLast}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Field
-                label="Next due mileage"
-                placeholder="87000"
-                keyboardType="number-pad"
-                value={effectiveNextDueMileage}
-                onChangeText={(t) => {
-                  setNextDueTouched(true);
-                  setNextDueMileage(t);
-                  setNextDueDate(effectiveNextDueDate);
-                }}
-                containerStyle={fieldLast}
-              />
-            </View>
+        <SectionLabel title="Next due" />
+        <View style={styles.twoCol}>
+          <View style={{ flex: 1 }}>
+            <Field
+              label="Next due date"
+              placeholder="YYYY-MM-DD"
+              value={effectiveNextDueDate}
+              onChangeText={(t) => {
+                setNextDueTouched(true);
+                setNextDueDate(t);
+                setNextDueMileage(effectiveNextDueMileage);
+              }}
+              containerStyle={fieldLast}
+            />
           </View>
-        </Card>
+          <View style={{ flex: 1 }}>
+            <Field
+              label="Next due mileage"
+              placeholder="87000"
+              keyboardType="number-pad"
+              value={effectiveNextDueMileage}
+              onChangeText={(t) => {
+                setNextDueTouched(true);
+                setNextDueMileage(t);
+                setNextDueDate(effectiveNextDueDate);
+              }}
+              containerStyle={fieldLast}
+            />
+          </View>
+        </View>
 
         {error != null && <Text style={styles.error}>{error}</Text>}
-        <Button title="Save record" onPress={save} style={{ marginTop: spacing.xl }} />
+        <Button title="Save service" onPress={save} style={{ marginTop: spacing.xl }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -288,14 +306,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
     paddingVertical: spacing.sm,
   },
   scanText: { color: palette.accent.primary, fontSize: typography.body.size, fontWeight: '500' },
-  nextDueHint: {
-    color: palette.text.tertiary,
-    fontSize: typography.meta.size,
-    marginBottom: spacing.md,
+  proLockRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border.subtle,
   },
-  error: { color: palette.status.overdue, fontSize: typography.caption.size, marginTop: spacing.md },
+  proLockTitle: {
+    color: palette.text.primary,
+    fontSize: typography.bodyEmphasis.size,
+    fontWeight: typography.bodyEmphasis.weight,
+  },
+  proLockMeta: { color: palette.text.tertiary, fontSize: typography.caption.size, marginTop: 2 },
+  error: { color: palette.status.overdue, fontSize: typography.caption.size },
 });

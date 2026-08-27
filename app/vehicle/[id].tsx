@@ -5,17 +5,14 @@ import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View 
 import {
   Button,
   Card,
-  DueBadge,
+  DetailRow,
   EmptyState,
-  IconCircle,
-  kindAccent,
-  ListRow,
-  MetricCard,
+  HealthRing,
+  MetricStrip,
+  ReminderListRow,
   Screen,
-  SectionHeader,
-  serviceTypeIcon,
-  StatTile,
-  VehicleHeroCard,
+  SectionLabel,
+  SegmentedControl,
 } from '@/components/ui';
 import { useReminders, useServiceRecords, useVehicle } from '@/lib/db/hooks';
 import { completeReminder, deleteReminder } from '@/lib/db/reminderRepo';
@@ -24,7 +21,7 @@ import { deleteVehicle, updateVehicleMileage, updateVehicleRecalls, updateVehicl
 import { dueSummary, reminderDueState, todayIso } from '@/lib/domain/due';
 import { formatMoney, summarizeExpenses } from '@/lib/domain/expenses';
 import { healthScore } from '@/lib/domain/healthScore';
-import { serviceTypeDef, serviceTypeLabel } from '@/lib/domain/serviceTypes';
+import { serviceTypeLabel } from '@/lib/domain/serviceTypes';
 import { decodedVinSummary, recallStatus } from '@/lib/domain/vin';
 import { canExportReport } from '@/lib/monetization/entitlements';
 import { useIsPro } from '@/lib/monetization/purchases';
@@ -32,12 +29,16 @@ import { shareVehicleReport } from '@/lib/report/export';
 import { palette, radius, spacing, typography } from '@/lib/theme';
 import { checkRecalls, decodeVin, vinAvailability } from '@/lib/vin/client';
 
+type Tab = 'overview' | 'maintenance' | 'expenses' | 'reminders';
+const BLOCK = 28;
+
 export default function VehicleDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const vehicle = useVehicle(id);
   const records = useServiceRecords(id);
   const reminders = useReminders({ vehicleId: id, status: 'active' });
+  const [tab, setTab] = useState<Tab>('overview');
   const [mileageDraft, setMileageDraft] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [decoding, setDecoding] = useState(false);
@@ -58,16 +59,6 @@ export default function VehicleDetailScreen() {
   const recallState = recallStatus({ checkedAt: vehicle.recallCheckedAt, recalls: vehicle.recalls });
   const decodedSummary = vehicle.vinDecoded ? decodedVinSummary(vehicle.vinDecoded) : null;
   const ymm = `${vehicle.year} ${vehicle.make} ${vehicle.model}${vehicle.trim ? ` ${vehicle.trim}` : ''}`;
-  const maintenanceStatus = reminders
-    .map((reminder) => ({
-      reminder,
-      state: reminderDueState(reminder, vehicle.mileage, today),
-    }))
-    .filter((e) => e.state === 'overdue' || e.state === 'due_soon')
-    .sort((a, b) => {
-      const rank = { overdue: 0, due_soon: 1, upcoming: 2, no_due: 3 };
-      return rank[a.state] - rank[b.state];
-    });
 
   function commitMileage() {
     if (mileageDraft == null || !vehicle) return;
@@ -156,12 +147,18 @@ export default function VehicleDetailScreen() {
     <Screen style={{ padding: 0 }}>
       <Stack.Screen options={{ title: vehicle.nickname }} />
       <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'] }}>
-        <VehicleHeroCard
-          photoUri={vehicle.photoUri}
-          title={vehicle.nickname}
-          subtitle={ymm}
-          health={{ score: health.score, label: health.label }}
-          meta={
+        <View style={styles.header}>
+          {vehicle.photoUri ? (
+            <Image source={{ uri: vehicle.photoUri }} style={styles.headerPhoto} />
+          ) : (
+            <View style={[styles.headerPhoto, styles.headerPhotoPlaceholder]}>
+              <Ionicons name="car-sport" size={28} color={palette.text.tertiary} />
+            </View>
+          )}
+          <View style={styles.headerIdentity}>
+            <Text style={styles.headerTitle} numberOfLines={2}>
+              {ymm}
+            </Text>
             <Pressable onPress={() => setMileageDraft(String(vehicle.mileage))}>
               {mileageDraft == null ? (
                 <Text style={styles.mileage}>
@@ -179,339 +176,310 @@ export default function VehicleDetailScreen() {
                 />
               )}
             </Pressable>
-          }
-        />
+          </View>
+          <HealthRing score={health.score} size={48} />
+        </View>
 
-        <SectionHeader title="Overview" />
-        <View style={styles.statRow}>
-          <StatTile label="This year" value={formatMoney(expenses.yearTotal)} />
-          <StatTile label="Lifetime" value={formatMoney(expenses.lifetimeTotal)} />
-          <StatTile
-            label="Cost / mile"
-            value={expenses.costPerMile != null ? `$${expenses.costPerMile.toFixed(2)}` : '—'}
+        <View style={styles.segmentWrap}>
+          <SegmentedControl
+            options={[
+              { value: 'overview', label: 'Overview' },
+              { value: 'maintenance', label: 'Maintenance' },
+              { value: 'expenses', label: 'Expenses' },
+              { value: 'reminders', label: 'Reminders' },
+            ]}
+            value={tab}
+            onChange={(v) => setTab(v as Tab)}
           />
         </View>
-        {health.reasons.length > 0 && (
-          <Card style={{ marginTop: spacing.md }}>
-            <Text style={styles.cardTitle}>Health notes</Text>
-            {health.reasons.map((reason) => (
-              <Text key={reason} style={styles.reasonText}>
-                • {reason}
-              </Text>
-            ))}
-          </Card>
-        )}
-        <Card style={{ marginTop: spacing.md }}>
-          <DetailRow label="License plate" value={vehicle.licensePlate ?? '—'} />
-          <DetailRow label="VIN" value={vehicle.vin ?? '—'} />
-          <DetailRow label="Purchased" value={vehicle.purchaseDate ?? '—'} />
-          <DetailRow
-            label="Purchase price"
-            value={vehicle.purchasePrice != null ? formatMoney(vehicle.purchasePrice) : '—'}
-            last
-          />
-        </Card>
-        <Button
-          title="Decode VIN"
-          variant="secondary"
-          loading={decoding}
-          disabled={!vehicle.vin}
-          onPress={() => void onDecodeVin()}
-          style={{ marginTop: spacing.md }}
-        />
-        {decodedSummary != null && (
-          <Text style={styles.decodedHint}>Decoded as {decodedSummary}</Text>
-        )}
 
-        <SectionHeader title="Maintenance status" />
-        {maintenanceStatus.length === 0 ? (
-          <Card>
-            <View style={styles.allGood}>
-              <Ionicons name="checkmark-circle-outline" size={20} color={palette.status.ok} />
-              <Text style={styles.allGoodText}>Nothing overdue. You're on top of it.</Text>
-            </View>
-          </Card>
-        ) : (
-          <View style={{ gap: spacing.sm }}>
-            {maintenanceStatus.map(({ reminder, state }) => (
-              <Card key={reminder.id} style={styles.attentionCard}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.recordType}>{reminder.title}</Text>
-                  <Text style={styles.recordMeta}>
-                    {dueSummary({
-                      dueDate: reminder.dueDate,
-                      dueMileage: reminder.dueMileage,
-                      currentMileage: vehicle.mileage,
-                      today,
-                    })}
+        {tab === 'overview' && (
+          <View style={{ gap: BLOCK }}>
+            <MetricStrip
+              items={[
+                { label: 'This year', value: formatMoney(expenses.yearTotal) },
+                { label: 'Lifetime', value: formatMoney(expenses.lifetimeTotal) },
+                {
+                  label: 'Cost / mile',
+                  value: expenses.costPerMile != null ? `$${expenses.costPerMile.toFixed(2)}` : '—',
+                },
+              ]}
+            />
+
+            {health.reasons.length > 0 && (
+              <Card>
+                <Text style={styles.cardTitle}>Health notes</Text>
+                {health.reasons.map((reason) => (
+                  <Text key={reason} style={styles.reasonText}>
+                    • {reason}
                   </Text>
-                </View>
-                <DueBadge state={state} />
+                ))}
               </Card>
-            ))}
+            )}
+
+            <View>
+              <SectionLabel title="Details" />
+              <Card>
+                <DetailRow label="License plate" value={vehicle.licensePlate ?? '—'} />
+                <DetailRow label="VIN" value={vehicle.vin ?? '—'} />
+                <DetailRow label="Purchased" value={vehicle.purchaseDate ?? '—'} />
+                <DetailRow
+                  label="Purchase price"
+                  value={vehicle.purchasePrice != null ? formatMoney(vehicle.purchasePrice) : '—'}
+                  last
+                />
+              </Card>
+            </View>
+
+            <View>
+              <SectionLabel title="VIN & recalls" />
+              <Card>
+                {decodedSummary != null && <DetailRow label="Decoded" value={decodedSummary} />}
+                <DetailRow
+                  label="Recalls"
+                  value={
+                    recallState === 'unknown'
+                      ? 'Not checked yet'
+                      : recallState === 'none'
+                        ? `No open recalls · ${vehicle.recallCheckedAt?.slice(0, 10) ?? today}`
+                        : `${vehicle.recalls.length} open`
+                  }
+                  last={recallState !== 'open'}
+                />
+                {recallState === 'open' &&
+                  vehicle.recalls.map((r, i) => (
+                    <View
+                      key={r.id}
+                      style={[styles.recallItem, i === vehicle.recalls.length - 1 && { borderBottomWidth: 0 }]}
+                    >
+                      <Text style={styles.recallComponent}>{r.component ?? 'Recall'}</Text>
+                      {r.summary != null && <Text style={styles.recordNotes}>{r.summary}</Text>}
+                    </View>
+                  ))}
+              </Card>
+            </View>
+
+            <View style={{ gap: spacing.md }}>
+              <View style={styles.rowActions}>
+                <Button
+                  title="Decode VIN"
+                  variant="secondary"
+                  loading={decoding}
+                  disabled={!vehicle.vin}
+                  onPress={() => void onDecodeVin()}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  title="Check recalls"
+                  variant="secondary"
+                  loading={checkingRecalls}
+                  onPress={() => void onCheckRecalls()}
+                  style={{ flex: 1 }}
+                />
+              </View>
+              <Button title="Export PDF" variant="secondary" loading={exporting} onPress={() => void exportReport()} />
+              <Button
+                title="Ask AI"
+                variant="secondary"
+                onPress={() => router.push({ pathname: '/ai/assistant', params: { vehicleId: vehicle.id } })}
+              />
+              <Button
+                title="Delete vehicle"
+                variant="danger"
+                onPress={confirmDeleteVehicle}
+                style={{ marginTop: spacing.lg }}
+              />
+            </View>
           </View>
         )}
 
-        <SectionHeader title="Recalls" />
-        <Card>
-          <DetailRow
-            label="Status"
-            value={
-              recallState === 'unknown'
-                ? 'Not checked yet'
-                : recallState === 'none'
-                  ? `No open recalls · checked ${vehicle.recallCheckedAt?.slice(0, 10) ?? today}`
-                  : `${vehicle.recalls.length} open recall${vehicle.recalls.length > 1 ? 's' : ''}`
-            }
-            last={recallState !== 'open'}
-          />
-          {recallState === 'open' &&
-            vehicle.recalls.map((r, i) => (
-              <View key={r.id} style={[styles.recallItem, i === vehicle.recalls.length - 1 && { borderBottomWidth: 0 }]}>
-                <Text style={styles.recallComponent}>{r.component ?? 'Recall'}</Text>
-                {r.summary != null && <Text style={styles.recordNotes}>{r.summary}</Text>}
-                {r.remedy != null && <Text style={styles.recallRemedy}>Remedy: {r.remedy}</Text>}
-              </View>
-            ))}
-        </Card>
-        <Button
-          title="Check recalls"
-          variant="secondary"
-          loading={checkingRecalls}
-          onPress={() => void onCheckRecalls()}
-          style={{ marginTop: spacing.md }}
-        />
-
-        <SectionHeader
-          title="Upcoming"
-          right={
-            <Pressable onPress={() => router.push({ pathname: '/reminder/add', params: { vehicleId: vehicle.id } })}>
-              <Text style={styles.link}>New reminder</Text>
-            </Pressable>
-          }
-        />
-        {reminders.length === 0 ? (
-          <EmptyState
-            title="No reminders"
-            message="Set up oil change, registration, or insurance reminders so nothing slips."
-          />
-        ) : (
-          <View style={{ gap: spacing.sm }}>
-            {reminders.map((r) => {
-              const state = reminderDueState(r, vehicle.mileage, today);
-              return (
-                <Card key={r.id}>
-                  <View style={styles.recordHeader}>
-                    <Text style={styles.recordType}>{r.title}</Text>
-                    <DueBadge state={state} />
+        {tab === 'maintenance' && (
+          <View style={{ gap: BLOCK }}>
+            <Button
+              title="Log service"
+              onPress={() => router.push({ pathname: '/service/add', params: { vehicleId: vehicle.id } })}
+            />
+            {records.length === 0 ? (
+              <EmptyState
+                title="No service history"
+                message="Log an oil change, repair, or registration to build history."
+                icon="construct-outline"
+              />
+            ) : (
+              <View>
+                {records.map((r, i) => (
+                  <View key={r.id} style={[styles.serviceRow, i < records.length - 1 && styles.serviceRowSep]}>
+                    <View style={styles.serviceRowTop}>
+                      <Text style={styles.serviceTitle} numberOfLines={1}>
+                        {serviceTypeLabel(r.serviceType)}
+                      </Text>
+                      {r.cost != null && <Text style={styles.serviceCost}>{formatMoney(r.cost)}</Text>}
+                    </View>
+                    <Text style={styles.serviceMeta} numberOfLines={1}>
+                      {[
+                        r.date,
+                        r.mileage != null ? `${r.mileage.toLocaleString()} mi` : null,
+                        r.shopName,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </Text>
+                    {(r.nextDueDate || r.nextDueMileage != null) && (
+                      <Text style={styles.serviceNext}>
+                        Next due:{' '}
+                        {dueSummary({
+                          dueDate: r.nextDueDate,
+                          dueMileage: r.nextDueMileage,
+                          currentMileage: vehicle.mileage,
+                          today,
+                        })}
+                      </Text>
+                    )}
+                    <View style={styles.serviceIcons}>
+                      <Pressable
+                        onPress={() =>
+                          router.push({
+                            pathname: '/ai/assistant',
+                            params: {
+                              vehicleId: vehicle.id,
+                              serviceLabel: serviceTypeLabel(r.serviceType),
+                              ...(r.cost != null ? { cost: String(r.cost) } : {}),
+                            },
+                          })
+                        }
+                        hitSlop={8}
+                      >
+                        <Ionicons name="sparkles-outline" size={18} color={palette.text.tertiary} />
+                      </Pressable>
+                      <Pressable
+                        onPress={() =>
+                          Alert.alert('Delete record', 'Remove this service record?', [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Delete', style: 'destructive', onPress: () => deleteServiceRecord(r.id) },
+                          ])
+                        }
+                        hitSlop={8}
+                      >
+                        <Ionicons name="trash-outline" size={18} color={palette.text.tertiary} />
+                      </Pressable>
+                    </View>
                   </View>
-                  <Text style={styles.recordMeta}>
-                    {dueSummary({
-                      dueDate: r.dueDate,
-                      dueMileage: r.dueMileage,
-                      currentMileage: vehicle.mileage,
-                      today,
-                    })}
-                    {r.recurrenceType !== 'none' ? ' · recurring' : ''}
-                  </Text>
-                  <View style={styles.reminderActions}>
-                    <Button
-                      title="Mark done"
-                      variant="secondary"
-                      onPress={() => completeReminder(r, vehicle.mileage)}
-                      style={{ flex: 1 }}
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
+        {tab === 'expenses' && (
+          <View style={{ gap: BLOCK }}>
+            <MetricStrip
+              items={[
+                { label: 'This month', value: formatMoney(expenses.monthTotal) },
+                { label: 'This year', value: formatMoney(expenses.yearTotal) },
+              ]}
+            />
+            <MetricStrip
+              items={[
+                { label: 'Maintenance', value: formatMoney(expenses.maintenanceTotal) },
+                { label: 'Repairs', value: formatMoney(expenses.repairTotal) },
+                { label: 'Admin', value: formatMoney(expenses.adminTotal) },
+              ]}
+            />
+            <View>
+              <SectionLabel title="By category" />
+              {expenses.byCategory.length === 0 ? (
+                <EmptyState
+                  title="No expenses yet"
+                  message="Costs from service records show up here."
+                  icon={null}
+                />
+              ) : (
+                <Card>
+                  {expenses.byCategory.map((c, i) => (
+                    <DetailRow
+                      key={c.serviceType}
+                      label={serviceTypeLabel(c.serviceType)}
+                      value={formatMoney(c.total)}
+                      last={i === expenses.byCategory.length - 1}
                     />
-                    <Pressable
+                  ))}
+                </Card>
+              )}
+            </View>
+          </View>
+        )}
+
+        {tab === 'reminders' && (
+          <View style={{ gap: BLOCK }}>
+            <Button
+              title="New reminder"
+              onPress={() => router.push({ pathname: '/reminder/add', params: { vehicleId: vehicle.id } })}
+            />
+            {reminders.length === 0 ? (
+              <EmptyState
+                title="Nothing scheduled"
+                message="Oil, registration, insurance — anything on a schedule."
+                icon="notifications-outline"
+              />
+            ) : (
+              <View>
+                {reminders.map((r, i) => {
+                  const state = reminderDueState(r, vehicle.mileage, today);
+                  return (
+                    <ReminderListRow
+                      key={r.id}
+                      title={r.title}
+                      meta={`${dueSummary({
+                        dueDate: r.dueDate,
+                        dueMileage: r.dueMileage,
+                        currentMileage: vehicle.mileage,
+                        today,
+                      })}${r.recurrenceType !== 'none' ? ' · recurring' : ''}`}
+                      state={state === 'no_due' ? 'upcoming' : state}
+                      showSeparator={i < reminders.length - 1}
+                      onDone={() => completeReminder(r, vehicle.mileage)}
                       onPress={() =>
                         Alert.alert('Delete reminder', `Delete "${r.title}"?`, [
                           { text: 'Cancel', style: 'cancel' },
                           { text: 'Delete', style: 'destructive', onPress: () => deleteReminder(r.id) },
                         ])
                       }
-                      style={styles.reminderDelete}
-                    >
-                      <Ionicons name="trash-outline" size={18} color={palette.text.tertiary} />
-                    </Pressable>
-                  </View>
-                </Card>
-              );
-            })}
+                    />
+                  );
+                })}
+              </View>
+            )}
           </View>
         )}
-
-        <SectionHeader
-          title="Service history"
-          right={
-            <Pressable onPress={() => router.push({ pathname: '/service/add', params: { vehicleId: vehicle.id } })}>
-              <Text style={styles.link}>Log service</Text>
-            </Pressable>
-          }
-        />
-        {records.length === 0 ? (
-          <EmptyState
-            title="No service history"
-            message="Log your first oil change, repair, or registration to start building history."
-          />
-        ) : (
-          <View style={{ gap: spacing.sm }}>
-            {records.map((r) => {
-              const kind = serviceTypeDef(r.serviceType).kind;
-              const color = kindAccent(kind);
-              return (
-                <Card key={r.id} style={styles.recordCard}>
-                  <ListRow
-                    icon={<IconCircle icon={serviceTypeIcon(r.serviceType)} color={color} size={44} />}
-                    title={serviceTypeLabel(r.serviceType)}
-                    trailing={
-                      r.cost != null ? <Text style={styles.recordCost}>{formatMoney(r.cost)}</Text> : undefined
-                    }
-                  />
-                  <View style={styles.recordDetails}>
-                    <DetailRow label="Date" value={r.date} />
-                    <DetailRow label="Mileage" value={r.mileage != null ? `${r.mileage.toLocaleString()} mi` : '—'} />
-                    <DetailRow label="Cost" value={r.cost != null ? formatMoney(r.cost) : '—'} />
-                    <DetailRow label="Shop" value={r.shopName ?? '—'} last={!(r.notes != null && r.notes !== '')} />
-                    {r.notes != null && r.notes !== '' && <DetailRow label="Notes" value={r.notes} last />}
-                  </View>
-                  {r.receiptUri != null && r.receiptUri !== '' && (
-                    <Image source={{ uri: r.receiptUri }} style={styles.receiptPreview} />
-                  )}
-                  {(r.nextDueDate || r.nextDueMileage != null) && (
-                    <Text style={styles.recordNext}>
-                      Reminder ·{' '}
-                      {dueSummary({
-                        dueDate: r.nextDueDate,
-                        dueMileage: r.nextDueMileage,
-                        currentMileage: vehicle.mileage,
-                        today,
-                      })}
-                    </Text>
-                  )}
-                  <View style={styles.recordActions}>
-                    <Pressable
-                      onPress={() =>
-                        router.push({
-                          pathname: '/ai/assistant',
-                          params: {
-                            vehicleId: vehicle.id,
-                            serviceLabel: serviceTypeLabel(r.serviceType),
-                            ...(r.cost != null ? { cost: String(r.cost) } : {}),
-                          },
-                        })
-                      }
-                      style={styles.recordActionBtn}
-                    >
-                      <Ionicons name="sparkles-outline" size={16} color={palette.text.tertiary} />
-                    </Pressable>
-                    <Pressable
-                      onPress={() =>
-                        Alert.alert('Delete record', 'Remove this service record?', [
-                          { text: 'Cancel', style: 'cancel' },
-                          { text: 'Delete', style: 'destructive', onPress: () => deleteServiceRecord(r.id) },
-                        ])
-                      }
-                      style={styles.recordActionBtn}
-                    >
-                      <Ionicons name="trash-outline" size={16} color={palette.status.overdue} />
-                    </Pressable>
-                  </View>
-                </Card>
-              );
-            })}
-          </View>
-        )}
-
-        <SectionHeader title="Costs" />
-        <MetricCard label="Total Spent" value={formatMoney(expenses.lifetimeTotal)} />
-        <View style={[styles.statRow, { marginTop: spacing.md }]}>
-          <StatTile label="Maintenance" value={formatMoney(expenses.maintenanceTotal)} />
-          <StatTile label="Repairs" value={formatMoney(expenses.repairTotal)} />
-        </View>
-        <View style={[styles.statRow, { marginTop: spacing.md }]}>
-          <StatTile
-            label="Cost / mile"
-            value={expenses.costPerMile != null ? `$${expenses.costPerMile.toFixed(2)}` : '—'}
-          />
-          <StatTile label="This year" value={formatMoney(expenses.yearTotal)} />
-        </View>
-        {(expenses.maintenanceTotal > 0 || expenses.repairTotal > 0 || expenses.adminTotal > 0) && (
-          <Card style={{ marginTop: spacing.md }}>
-            <Text style={styles.cardTitle}>Spend mix</Text>
-            <SpendBar
-              parts={[
-                { label: 'Maintenance', value: expenses.maintenanceTotal, color: palette.accent.primary },
-                { label: 'Repairs', value: expenses.repairTotal, color: palette.accent.danger },
-                { label: 'Admin', value: expenses.adminTotal, color: palette.text.tertiary },
-              ]}
-            />
-          </Card>
-        )}
-        <SectionHeader title="By category" />
-        {expenses.byCategory.length === 0 ? (
-          <EmptyState title="No expenses yet" message="Costs from service records show up here." />
-        ) : (
-          <Card>
-            {expenses.byCategory.map((c, i) => (
-              <DetailRow
-                key={c.serviceType}
-                label={serviceTypeLabel(c.serviceType)}
-                value={formatMoney(c.total)}
-                last={i === expenses.byCategory.length - 1}
-              />
-            ))}
-          </Card>
-        )}
-
-        <SectionHeader title="AI tools" />
-        <Button
-          title="Ask AI about a repair"
-          variant="secondary"
-          onPress={() => router.push({ pathname: '/ai/assistant', params: { vehicleId: vehicle.id } })}
-        />
-
-        <SectionHeader title="Report" />
-        <Button title="Export PDF report" variant="secondary" loading={exporting} onPress={() => void exportReport()} />
-        <Button title="Delete vehicle" variant="danger" onPress={confirmDeleteVehicle} style={{ marginTop: spacing.md }} />
       </ScrollView>
     </Screen>
   );
 }
 
-function DetailRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
-  return (
-    <View style={[styles.detailRow, !last && styles.detailRowBorder]}>
-      <Text style={styles.detailLabel}>{label}</Text>
-      <Text style={styles.detailValue}>{value}</Text>
-    </View>
-  );
-}
-
-function SpendBar({
-  parts,
-}: {
-  parts: Array<{ label: string; value: number; color: string }>;
-}) {
-  const max = Math.max(...parts.map((p) => p.value), 1);
-  return (
-    <View style={{ gap: spacing.md }}>
-      {parts.map((part) => (
-        <View key={part.label}>
-          <View style={styles.spendLegend}>
-            <Text style={styles.detailLabel}>{part.label}</Text>
-            <Text style={styles.detailValue}>{formatMoney(part.value)}</Text>
-          </View>
-          <View style={styles.spendTrack}>
-            <View style={{ flex: part.value, height: 8, backgroundColor: part.color, borderRadius: 99 }} />
-            <View style={{ flex: Math.max(max - part.value, 0) }} />
-          </View>
-        </View>
-      ))}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  mileage: { color: palette.text.secondary, fontSize: typography.body.size },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  headerPhoto: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.md,
+  },
+  headerPhotoPlaceholder: {
+    backgroundColor: palette.bg.hero,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerIdentity: { flex: 1, minWidth: 0, gap: 4 },
+  headerTitle: {
+    color: palette.text.primary,
+    fontSize: typography.h3.size,
+    fontWeight: typography.h3.weight,
+    lineHeight: typography.h3.lineHeight,
+  },
+  mileage: { color: palette.text.secondary, fontSize: typography.caption.size },
   mileageEdit: { color: palette.accent.primary, fontSize: typography.caption.size },
   mileageInput: {
     color: palette.text.primary,
@@ -521,7 +489,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     minWidth: 90,
   },
-  statRow: { flexDirection: 'row', gap: spacing.md },
+  segmentWrap: { marginVertical: spacing.lg },
   cardTitle: {
     color: palette.text.primary,
     fontSize: typography.bodyEmphasis.size,
@@ -529,30 +497,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   reasonText: { color: palette.text.secondary, fontSize: typography.caption.size, lineHeight: 20 },
-  decodedHint: {
-    color: palette.text.tertiary,
-    fontSize: typography.meta.size,
-    marginTop: spacing.sm,
-  },
-  allGood: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  allGoodText: { color: palette.text.secondary, fontSize: typography.body.size, flex: 1 },
-  attentionCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
-  link: { color: palette.accent.primary, fontSize: typography.caption.size, fontWeight: '600' },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  detailRowBorder: { borderBottomWidth: 1, borderBottomColor: palette.border.subtle },
-  detailLabel: { color: palette.text.secondary, fontSize: typography.body.size },
-  detailValue: {
-    color: palette.text.primary,
-    fontSize: typography.body.size,
-    fontWeight: '500',
-    flexShrink: 1,
-    textAlign: 'right',
-  },
   recallItem: {
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
@@ -563,44 +507,28 @@ const styles = StyleSheet.create({
     fontSize: typography.bodyEmphasis.size,
     fontWeight: typography.bodyEmphasis.weight,
   },
-  recallRemedy: { color: palette.text.secondary, fontSize: typography.caption.size, marginTop: spacing.xs },
-  recordHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  recordType: {
+  recordNotes: { color: palette.text.secondary, fontSize: typography.caption.size, marginTop: spacing.xs },
+  rowActions: { flexDirection: 'row', gap: spacing.md },
+  serviceRow: { paddingVertical: spacing.md },
+  serviceRowSep: { borderBottomWidth: 1, borderBottomColor: palette.border.subtle },
+  serviceRowTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  serviceTitle: {
+    flex: 1,
     color: palette.text.primary,
     fontSize: typography.bodyEmphasis.size,
     fontWeight: typography.bodyEmphasis.weight,
   },
-  recordCost: { color: palette.accent.primary, fontSize: typography.bodyEmphasis.size, fontWeight: '600' },
-  recordMeta: { color: palette.text.tertiary, fontSize: typography.meta.size, marginTop: 2 },
-  recordNotes: { color: palette.text.secondary, fontSize: typography.caption.size, marginTop: spacing.sm },
-  recordNext: { color: palette.status.dueSoon, fontSize: typography.caption.size, marginTop: spacing.sm },
-  recordCard: { gap: spacing.sm },
-  recordDetails: { marginTop: spacing.xs },
-  receiptPreview: {
-    width: '100%',
-    height: 140,
-    borderRadius: radius.md,
-    backgroundColor: palette.bg.raised,
-    marginTop: spacing.sm,
+  serviceCost: {
+    color: palette.text.primary,
+    fontSize: typography.bodyEmphasis.size,
+    fontWeight: '600',
   },
-  recordActions: {
+  serviceMeta: { color: palette.text.tertiary, fontSize: typography.caption.size, marginTop: 2 },
+  serviceNext: { color: palette.text.secondary, fontSize: typography.caption.size, marginTop: 4 },
+  serviceIcons: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: palette.border.subtle,
-  },
-  recordActionBtn: { padding: spacing.xs },
-  reminderActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.md },
-  reminderDelete: { padding: spacing.sm },
-  spendLegend: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  spendTrack: {
-    height: 8,
-    borderRadius: radius.pill,
-    backgroundColor: palette.bg.raised,
-    overflow: 'hidden',
-    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.sm,
   },
 });

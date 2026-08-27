@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, Chip, EmptyState, Field, SectionHeader } from '@/components/ui';
+import { Button, Chip, EmptyState, Field, SectionLabel } from '@/components/ui';
 import { useVehicles } from '@/lib/db/hooks';
 import { createReminder } from '@/lib/db/reminderRepo';
 import { serviceTypeDef, SERVICE_TYPES } from '@/lib/domain/serviceTypes';
@@ -80,7 +80,7 @@ export default function AddReminderScreen() {
   if (vehicles.length === 0) {
     return (
       <View style={styles.screen}>
-        <EmptyState title="No vehicles" message="Add a vehicle first, then create reminders for it." />
+        <EmptyState title="No vehicles yet" message="Add a vehicle in Garage, then set reminders." icon="car-outline" />
       </View>
     );
   }
@@ -89,22 +89,22 @@ export default function AddReminderScreen() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
         style={styles.screen}
-        contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'] }}
+        contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'], gap: spacing.xl }}
         keyboardShouldPersistTaps="handled"
       >
         {vehicles.length > 1 && (
-          <>
-            <SectionHeader title="Vehicle" />
+          <View>
+            <SectionLabel title="Vehicle" />
             <View style={styles.chipWrap}>
               {vehicles.map((v) => (
                 <Chip key={v.id} label={v.nickname} selected={v.id === vehicleId} onPress={() => setVehicleId(v.id)} />
               ))}
             </View>
-          </>
+          </View>
         )}
 
-        <SectionHeader title="What for" />
-        <Card>
+        <View>
+          <SectionLabel title="What for" />
           <View style={styles.chipWrap}>
             {SERVICE_TYPES.map((t) => (
               <Chip key={t.id} label={t.label} selected={t.id === category} onPress={() => selectCategory(t.id)} />
@@ -118,12 +118,12 @@ export default function AddReminderScreen() {
               setTitleTouched(true);
               setTitle(t);
             }}
-            containerStyle={{ marginBottom: 0, marginTop: spacing.sm }}
+            containerStyle={{ marginBottom: 0, marginTop: spacing.md }}
           />
-        </Card>
+        </View>
 
-        <SectionHeader title="Due" />
-        <Card>
+        <View>
+          <SectionLabel title="Due" />
           <View style={styles.twoCol}>
             <View style={{ flex: 1 }}>
               <Field
@@ -145,10 +145,10 @@ export default function AddReminderScreen() {
               />
             </View>
           </View>
-        </Card>
+        </View>
 
-        <SectionHeader title="Repeats" />
-        <Card>
+        <View>
+          <SectionLabel title="Repeats" />
           <View style={styles.chipWrap}>
             {RECURRENCE_OPTIONS.map((o) => (
               <Chip key={o.id} label={o.label} selected={recurrence === o.id} onPress={() => setRecurrence(o.id)} />
@@ -174,10 +174,10 @@ export default function AddReminderScreen() {
               containerStyle={{ marginBottom: 0, marginTop: spacing.sm }}
             />
           )}
-        </Card>
+        </View>
 
         {error != null && <Text style={styles.error}>{error}</Text>}
-        <Button title="Create reminder" onPress={save} style={{ marginTop: spacing.xl }} />
+        <Button title="Create reminder" onPress={save} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -187,5 +187,5 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.bg.app },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap' },
   twoCol: { flexDirection: 'row', gap: spacing.md },
-  error: { color: palette.status.overdue, fontSize: typography.caption.size, marginBottom: spacing.sm },
+  error: { color: palette.status.overdue, fontSize: typography.caption.size },
 });

@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   Image,
   ImageBackground,
   Pressable,
@@ -13,6 +15,7 @@ import {
   type TextInputProps,
   type ViewStyle,
 } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import type { DueState } from '@/lib/domain/due';
 import { palette, radius, spacing, typography } from '@/lib/theme';
 
@@ -32,11 +35,34 @@ export function Card({
   return <View style={[styles.card, raised && styles.cardRaised, style]}>{children}</View>;
 }
 
+/** Legacy uppercase overline header — keep for forms / other tabs. */
 export function SectionHeader({ title, right }: { title: string; right?: React.ReactNode }) {
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{title.toUpperCase()}</Text>
       {right}
+    </View>
+  );
+}
+
+/** Sentence-case section label for Dashboard / Garage. */
+export function SectionLabel({
+  title,
+  actionLabel,
+  onAction,
+}: {
+  title: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <View style={styles.sectionLabel}>
+      <Text style={styles.sectionLabelTitle}>{title}</Text>
+      {actionLabel != null && onAction != null && (
+        <Pressable accessibilityRole="button" onPress={onAction} hitSlop={8}>
+          <Text style={styles.sectionLabelAction}>{actionLabel}</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -68,21 +94,21 @@ export function Button({
         variant === 'primary' && { backgroundColor: pressed ? palette.accent.primaryPressed : palette.accent.primary },
         variant === 'secondary' && styles.buttonSecondary,
         variant === 'ghost' && styles.buttonGhost,
-        variant === 'danger' && {
-          backgroundColor: pressed ? palette.accent.dangerPressed : palette.accent.danger,
-        },
+        variant === 'danger' && [styles.buttonDanger, pressed && { opacity: 0.85 }],
         (disabled || loading) && { opacity: 0.5 },
         style,
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={onAccent ? palette.text.onAccent : palette.text.primary} />
+        <ActivityIndicator
+          color={onAccent ? palette.text.onAccent : onDanger ? palette.accent.danger : palette.text.primary}
+        />
       ) : (
         <Text
           style={[
             styles.buttonText,
             onAccent && { color: palette.text.onAccent },
-            onDanger && { color: palette.text.primary },
+            onDanger && { color: palette.accent.danger },
           ]}
         >
           {title}
@@ -184,20 +210,217 @@ export function StatTile({ label, value, hint }: { label: string; value: string;
   return <MetricCard label={label} value={value} hint={hint} />;
 }
 
+/** Borderless metric strip — 2 or 3 equal cells. */
+export function MetricStrip({ items }: { items: Array<{ label: string; value: string }> }) {
+  return (
+    <View style={styles.metricStrip}>
+      {items.map((item, i) => (
+        <React.Fragment key={item.label}>
+          {i > 0 && <View style={styles.metricStripDivider} />}
+          <View style={styles.metricStripCell}>
+            <Text style={styles.metricStripLabel}>{item.label}</Text>
+            <Text style={styles.metricStripValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>
+              {item.value}
+            </Text>
+          </View>
+        </React.Fragment>
+      ))}
+    </View>
+  );
+}
+
+/** Reminder / vehicle-reminder list row — left bar, optional Done. */
+export function ReminderListRow({
+  title,
+  meta,
+  state,
+  completed,
+  onPress,
+  onDone,
+  showSeparator,
+}: {
+  title: string;
+  meta: string;
+  state?: DueState;
+  completed?: boolean;
+  onPress?: () => void;
+  onDone?: () => void;
+  showSeparator?: boolean;
+}) {
+  const bar =
+    completed || state == null || state === 'upcoming' || state === 'no_due'
+      ? 'transparent'
+      : state === 'overdue'
+        ? palette.status.overdue
+        : palette.status.dueSoon;
+
+  const body = (
+    <View style={[styles.reminderListRow, showSeparator && styles.reminderListSep, completed && { opacity: 0.55 }]}>
+      <View style={[styles.attentionBar, { backgroundColor: bar }]} />
+      <View style={styles.reminderListBody}>
+        <View style={styles.reminderListHeader}>
+          <Text style={styles.attentionTitle} numberOfLines={1}>
+            {title}
+          </Text>
+          {!completed && state != null && state !== 'no_due' && <DueBadge state={state} />}
+        </View>
+        <Text style={styles.attentionMeta} numberOfLines={2}>
+          {meta}
+        </Text>
+        {onDone != null && !completed && (
+          <Pressable
+            accessibilityRole="button"
+            onPress={onDone}
+            style={styles.reminderDoneBtn}
+            hitSlop={6}
+          >
+            <Text style={styles.reminderDoneText}>Done</Text>
+          </Pressable>
+        )}
+      </View>
+    </View>
+  );
+
+  if (onPress) {
+    return (
+      <Pressable accessibilityRole="button" onPress={onPress}>
+        {body}
+      </Pressable>
+    );
+  }
+  return body;
+}
+
+export function DetailRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
+  return (
+    <View style={[styles.detailRow, !last && styles.detailRowBorder]}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={styles.detailValue}>{value}</Text>
+    </View>
+  );
+}
+
+function attentionBarColor(state: DueState): string {
+  if (state === 'overdue') return palette.status.overdue;
+  if (state === 'due_soon') return palette.status.dueSoon;
+  return 'transparent';
+}
+
+/** Full-width attention row — left signal bar, no card chrome. */
+export function AttentionRow({
+  title,
+  meta,
+  state,
+  onPress,
+  showSeparator,
+}: {
+  title: string;
+  meta: string;
+  state: DueState;
+  onPress: () => void;
+  showSeparator?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={[styles.attentionRow, showSeparator && styles.attentionRowSep]}
+    >
+      <View style={[styles.attentionBar, { backgroundColor: attentionBarColor(state) }]} />
+      <View style={styles.attentionBody}>
+        <Text style={styles.attentionTitle} numberOfLines={1}>
+          {title}
+        </Text>
+        <Text style={styles.attentionMeta} numberOfLines={1}>
+          {meta}
+        </Text>
+      </View>
+      <DueBadge state={state} />
+      <Ionicons name="chevron-forward" size={16} color={palette.text.tertiary} />
+    </Pressable>
+  );
+}
+
+export function healthRingColor(score: number): string {
+  // Mid band uses dueSoon (amber) so it stays distinct from ok/CTA green.
+  if (score >= 80) return palette.status.ok;
+  if (score >= 50) return palette.status.dueSoon;
+  return palette.status.overdue;
+}
+
+/** 44pt health ring — arc draws 0→score on first mount. */
+export function HealthRing({ score, size = 44 }: { score: number; size?: number }) {
+  const stroke = 3;
+  const radiusPx = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radiusPx;
+  const clamped = Math.max(0, Math.min(100, score));
+  const color = healthRingColor(clamped);
+  const progress = useRef(new Animated.Value(0)).current;
+  const [dashOffset, setDashOffset] = useState(circumference);
+
+  useEffect(() => {
+    progress.setValue(0);
+    const id = progress.addListener(({ value }) => {
+      setDashOffset(circumference * (1 - value));
+    });
+    Animated.timing(progress, {
+      toValue: clamped / 100,
+      duration: 400,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+    return () => progress.removeListener(id);
+  }, [clamped, circumference, progress]);
+
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radiusPx}
+          stroke={palette.border.subtle}
+          strokeWidth={stroke}
+          fill="none"
+        />
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radiusPx}
+          stroke={color}
+          strokeWidth={stroke}
+          fill="none"
+          strokeDasharray={`${circumference} ${circumference}`}
+          strokeDashoffset={dashOffset}
+          strokeLinecap="round"
+          rotation="-90"
+          origin={`${size / 2}, ${size / 2}`}
+        />
+      </Svg>
+      <Text style={styles.healthRingScore}>{Math.round(clamped)}</Text>
+    </View>
+  );
+}
+
 export function EmptyState({
   title,
   message,
   action,
+  icon = null,
 }: {
   title: string;
   message: string;
   action?: React.ReactNode;
+  icon?: React.ComponentProps<typeof Ionicons>['name'] | null;
 }) {
   return (
     <View style={styles.empty}>
+      {icon != null && (
+        <Ionicons name={icon} size={64} color={palette.text.tertiary} style={{ marginBottom: spacing.lg }} />
+      )}
       <Text style={styles.emptyTitle}>{title}</Text>
       <Text style={styles.emptyMessage}>{message}</Text>
-      {action != null && <View style={{ marginTop: spacing.lg }}>{action}</View>}
+      {action != null && <View style={{ marginTop: spacing.xl }}>{action}</View>}
     </View>
   );
 }
@@ -244,13 +467,17 @@ export function PhotoTile({
   height?: number;
 }) {
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={[styles.photoTile, { height }]}>
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={[styles.photoTile, { height }, uri ? styles.photoTileFilled : null]}
+    >
       {uri ? (
         <Image source={{ uri }} style={styles.photoTileImage} />
       ) : (
         <View style={styles.photoTileEmpty}>
           <View style={styles.photoTileIconWrap}>
-            <Ionicons name={emptyIcon} size={26} color={palette.accent.primary} />
+            <Ionicons name={emptyIcon} size={26} color={palette.text.tertiary} />
           </View>
           <Text style={styles.photoTileLabel}>{emptyLabel}</Text>
         </View>
@@ -271,9 +498,9 @@ export function Chip({
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.chip, selected && { backgroundColor: palette.accent.primary, borderColor: palette.accent.primary }]}
+      style={[styles.chip, selected && styles.chipSelected]}
     >
-      <Text style={[styles.chipText, selected && { color: palette.text.onAccent, fontWeight: '600' }]}>{label}</Text>
+      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
     </Pressable>
   );
 }
@@ -377,7 +604,8 @@ export function ListRow({
   return body;
 }
 
-export function VehicleHeroCard({
+/** Full-bleed photo hero — used on vehicle detail (unchanged pattern). */
+export function VehicleCoverHero({
   photoUri,
   title,
   subtitle,
@@ -395,28 +623,28 @@ export function VehicleHeroCard({
   style?: StyleProp<ViewStyle>;
 }) {
   const content = (
-    <View style={styles.heroContent}>
-      <View style={styles.heroTop}>
+    <View style={styles.coverContent}>
+      <View style={styles.coverTop}>
         {health != null && (
-          <View style={styles.heroHealth}>
-            <Text style={styles.heroScore}>{health.score}</Text>
+          <View style={styles.coverHealth}>
+            <Text style={styles.coverScore}>{health.score}</Text>
             <StatusBadge label={health.label} tone={healthTone(health.label)} />
           </View>
         )}
       </View>
-      <View style={styles.heroBottom}>
-        <Text style={styles.heroTitle} numberOfLines={1}>
+      <View style={styles.coverBottom}>
+        <Text style={styles.coverTitle} numberOfLines={1}>
           {title}
         </Text>
         {subtitle != null && subtitle !== '' && (
-          <Text style={styles.heroSubtitle} numberOfLines={1}>
+          <Text style={styles.coverSubtitle} numberOfLines={1}>
             {subtitle}
           </Text>
         )}
-        {meta != null && <View style={styles.heroMeta}>{meta}</View>}
+        {meta != null && <View style={styles.coverMeta}>{meta}</View>}
         {cta != null && (
-          <Pressable accessibilityRole="button" onPress={cta.onPress} style={styles.heroCta}>
-            <Text style={styles.heroCtaText}>{cta.label}</Text>
+          <Pressable accessibilityRole="button" onPress={cta.onPress} style={styles.coverCta}>
+            <Text style={styles.coverCtaText}>{cta.label}</Text>
             <Ionicons name="chevron-forward" size={14} color={palette.accent.primary} />
           </Pressable>
         )}
@@ -428,24 +656,81 @@ export function VehicleHeroCard({
     return (
       <ImageBackground
         source={{ uri: photoUri }}
-        style={[styles.hero, style]}
-        imageStyle={styles.heroImage}
+        style={[styles.cover, style]}
+        imageStyle={styles.coverImage}
         resizeMode="cover"
       >
         <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.bg.app, opacity: 0.32 }]} />
-        <View style={styles.heroBottomScrim} />
+        <View style={styles.coverBottomScrim} />
         {content}
       </ImageBackground>
     );
   }
 
   return (
-    <View style={[styles.hero, styles.heroPlaceholder, style]}>
-      <View style={styles.heroPlaceholderIcon}>
+    <View style={[styles.cover, styles.coverPlaceholder, style]}>
+      <View style={styles.coverPlaceholderIcon}>
         <Ionicons name="car-sport" size={44} color={palette.text.tertiary} />
       </View>
       {content}
     </View>
+  );
+}
+
+/** Garage vehicle hero — photo plate + identity + health ring + next-due footer. */
+export function VehicleHeroCard({
+  photoUri,
+  nickname,
+  plate,
+  mileage,
+  healthScore: score,
+  nextDue,
+  onPress,
+  style,
+}: {
+  photoUri: string | null | undefined;
+  nickname: string;
+  plate: string;
+  mileage: string;
+  healthScore: number;
+  nextDue?: { title: string; summary: string; state: DueState } | null;
+  onPress: () => void;
+  style?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={style}>
+      <View style={styles.vhCard}>
+        <View style={styles.vhTop}>
+          {photoUri ? (
+            <Image source={{ uri: photoUri }} style={styles.vhPhoto} />
+          ) : (
+            <View style={[styles.vhPhoto, styles.vhPhotoPlaceholder]}>
+              <Ionicons name="car-sport" size={28} color={palette.text.tertiary} />
+            </View>
+          )}
+          <View style={styles.vhIdentity}>
+            <Text style={styles.vhNickname} numberOfLines={1}>
+              {nickname}
+            </Text>
+            <Text style={styles.vhPlate} numberOfLines={1}>
+              {plate}
+            </Text>
+            <Text style={styles.vhMileage} numberOfLines={1}>
+              {mileage}
+            </Text>
+          </View>
+          <HealthRing score={score} />
+        </View>
+        {nextDue != null && (
+          <View style={styles.vhFooter}>
+            <View style={[styles.vhFooterBar, { backgroundColor: attentionBarColor(nextDue.state) }]} />
+            <Text style={styles.vhFooterText} numberOfLines={1}>
+              {nextDue.title} · {nextDue.summary}
+            </Text>
+          </View>
+        )}
+      </View>
+    </Pressable>
   );
 }
 
@@ -478,6 +763,23 @@ const styles = StyleSheet.create({
     fontWeight: typography.overline.weight,
     letterSpacing: typography.overline.letterSpacing,
   },
+  sectionLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  sectionLabelTitle: {
+    color: palette.text.primary,
+    fontSize: typography.bodyEmphasis.size,
+    fontWeight: typography.bodyEmphasis.weight,
+    lineHeight: typography.bodyEmphasis.lineHeight,
+  },
+  sectionLabelAction: {
+    color: palette.accent.primary,
+    fontSize: typography.caption.size,
+    fontWeight: '600',
+  },
   button: {
     borderRadius: radius.md,
     paddingVertical: 14,
@@ -493,10 +795,66 @@ const styles = StyleSheet.create({
   buttonGhost: {
     backgroundColor: 'transparent',
   },
+  buttonDanger: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: palette.accent.danger,
+  },
   buttonText: {
     color: palette.text.primary,
     fontSize: typography.bodyEmphasis.size,
     fontWeight: typography.bodyEmphasis.weight,
+  },
+  reminderListRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    minHeight: 56,
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingRight: spacing.xs,
+  },
+  reminderListSep: {
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border.subtle,
+  },
+  reminderListBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  reminderListHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  reminderDoneBtn: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.sm,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.sm,
+    backgroundColor: palette.bg.surfaceRaised,
+    borderWidth: 1,
+    borderColor: palette.border.default,
+  },
+  reminderDoneText: {
+    color: palette.text.primary,
+    fontSize: typography.caption.size,
+    fontWeight: '600',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  detailRowBorder: { borderBottomWidth: 1, borderBottomColor: palette.border.subtle },
+  detailLabel: { color: palette.text.secondary, fontSize: typography.body.size },
+  detailValue: {
+    color: palette.text.primary,
+    fontSize: typography.body.size,
+    fontWeight: '500',
+    flexShrink: 1,
+    textAlign: 'right',
   },
   field: {
     marginBottom: spacing.lg,
@@ -559,8 +917,76 @@ const styles = StyleSheet.create({
     fontSize: typography.meta.size,
     marginTop: 2,
   },
-  empty: {
+  metricStrip: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    minHeight: 64,
+  },
+  metricStripCell: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingVertical: spacing.sm,
+  },
+  metricStripDivider: {
+    width: 1,
+    backgroundColor: palette.border.subtle,
+    marginVertical: spacing.xs,
+  },
+  metricStripLabel: {
+    color: palette.text.tertiary,
+    fontSize: typography.overline.size,
+    fontWeight: typography.overline.weight,
+    letterSpacing: typography.overline.letterSpacing,
+    textTransform: 'uppercase',
+  },
+  metricStripValue: {
+    color: palette.text.primary,
+    fontSize: typography.h2.size,
+    fontWeight: typography.h2.weight,
+    lineHeight: typography.h2.lineHeight,
+    marginTop: 2,
+  },
+  attentionRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 56,
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingRight: spacing.xs,
+  },
+  attentionRowSep: {
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border.subtle,
+  },
+  attentionBar: {
+    width: 3,
+    alignSelf: 'stretch',
+    borderRadius: 2,
+    marginVertical: 4,
+  },
+  attentionBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  attentionTitle: {
+    color: palette.text.primary,
+    fontSize: typography.bodyEmphasis.size,
+    fontWeight: typography.bodyEmphasis.weight,
+  },
+  attentionMeta: {
+    color: palette.text.tertiary,
+    fontSize: typography.caption.size,
+    marginTop: 2,
+  },
+  healthRingScore: {
+    color: palette.text.primary,
+    fontSize: typography.bodyEmphasis.size,
+    fontWeight: typography.bodyEmphasis.weight,
+  },
+  empty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: spacing.xl,
     paddingHorizontal: spacing.lg,
   },
@@ -568,6 +994,7 @@ const styles = StyleSheet.create({
     color: palette.text.primary,
     fontSize: typography.h3.size,
     fontWeight: typography.h3.weight,
+    textAlign: 'center',
   },
   emptyMessage: {
     color: palette.text.secondary,
@@ -575,20 +1002,29 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.sm,
     lineHeight: typography.body.lineHeight,
+    maxWidth: 280,
   },
   chip: {
     borderWidth: 1,
-    borderColor: palette.border.default,
-    backgroundColor: palette.bg.surface,
+    borderColor: palette.border.subtle,
+    backgroundColor: palette.bg.surfaceRaised,
     borderRadius: radius.pill,
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
     marginRight: spacing.sm,
     marginBottom: spacing.sm,
   },
+  chipSelected: {
+    backgroundColor: palette.accent.soft,
+    borderColor: palette.accent.primary,
+  },
   chipText: {
     color: palette.text.secondary,
     fontSize: typography.caption.size,
+  },
+  chipTextSelected: {
+    color: palette.accent.primary,
+    fontWeight: '600',
   },
   iconCircle: {
     alignItems: 'center',
@@ -614,7 +1050,7 @@ const styles = StyleSheet.create({
     fontSize: typography.meta.size,
     marginTop: 2,
   },
-  hero: {
+  cover: {
     height: 256,
     borderRadius: radius.hero,
     overflow: 'hidden',
@@ -622,19 +1058,19 @@ const styles = StyleSheet.create({
     borderColor: palette.border.subtle,
     justifyContent: 'flex-end',
   },
-  heroImage: {
+  coverImage: {
     borderRadius: radius.hero,
   },
-  heroPlaceholder: {
+  coverPlaceholder: {
     backgroundColor: palette.bg.surfaceRaised,
   },
-  heroPlaceholderIcon: {
+  coverPlaceholderIcon: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
     paddingBottom: 36,
   },
-  heroBottomScrim: {
+  coverBottomScrim: {
     position: 'absolute',
     left: 0,
     right: 0,
@@ -643,49 +1079,111 @@ const styles = StyleSheet.create({
     backgroundColor: palette.bg.app,
     opacity: 0.82,
   },
-  heroContent: {
+  coverContent: {
     flex: 1,
     justifyContent: 'space-between',
     padding: spacing.lg,
   },
-  heroTop: {
+  coverTop: {
     alignItems: 'flex-end',
   },
-  heroHealth: {
+  coverHealth: {
     alignItems: 'flex-end',
     gap: spacing.xs,
   },
-  heroScore: {
+  coverScore: {
     color: palette.accent.primary,
     fontSize: typography.metric.size,
     fontWeight: typography.metric.weight,
   },
-  heroBottom: {
+  coverBottom: {
     gap: 2,
   },
-  heroTitle: {
+  coverTitle: {
     color: palette.text.primary,
     fontSize: typography.hero.size,
     fontWeight: typography.hero.weight,
   },
-  heroSubtitle: {
+  coverSubtitle: {
     color: palette.text.secondary,
     fontSize: typography.body.size,
   },
-  heroMeta: {
+  coverMeta: {
     marginTop: 2,
   },
-  heroCta: {
+  coverCta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     marginTop: spacing.sm,
     alignSelf: 'flex-start',
   },
-  heroCtaText: {
+  coverCtaText: {
     color: palette.accent.primary,
     fontSize: typography.caption.size,
     fontWeight: '600',
+  },
+  vhCard: {
+    backgroundColor: palette.bg.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: palette.border.subtle,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  vhTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  vhPhoto: {
+    width: 96,
+    height: 96,
+    borderRadius: radius.md,
+  },
+  vhPhotoPlaceholder: {
+    backgroundColor: palette.bg.hero,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vhIdentity: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  vhNickname: {
+    color: palette.text.primary,
+    fontSize: typography.plate.size,
+    fontWeight: typography.plate.weight,
+    lineHeight: typography.plate.lineHeight,
+  },
+  vhPlate: {
+    color: palette.text.secondary,
+    fontSize: typography.caption.size,
+    lineHeight: typography.caption.lineHeight,
+  },
+  vhMileage: {
+    color: palette.text.tertiary,
+    fontSize: typography.caption.size,
+    lineHeight: typography.caption.lineHeight,
+  },
+  vhFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: palette.border.subtle,
+    paddingTop: spacing.md,
+  },
+  vhFooterBar: {
+    width: 3,
+    height: 16,
+    borderRadius: 2,
+  },
+  vhFooterText: {
+    flex: 1,
+    color: palette.text.secondary,
+    fontSize: typography.caption.size,
   },
   segment: {
     flexDirection: 'row',
@@ -714,11 +1212,16 @@ const styles = StyleSheet.create({
   },
   photoTile: {
     width: '100%',
-    borderRadius: radius.hero,
+    borderRadius: radius.lg,
     overflow: 'hidden',
     borderWidth: 1,
+    borderColor: palette.border.default,
+    borderStyle: 'dashed',
+    backgroundColor: palette.bg.surface,
+  },
+  photoTileFilled: {
+    borderStyle: 'solid',
     borderColor: palette.border.subtle,
-    backgroundColor: palette.bg.surfaceRaised,
   },
   photoTileImage: {
     width: '100%',
@@ -729,15 +1232,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    borderStyle: 'dashed',
   },
   photoTileIconWrap: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: palette.bg.raised,
-    borderWidth: 1,
-    borderColor: palette.border.subtle,
+    backgroundColor: palette.bg.hero,
     alignItems: 'center',
     justifyContent: 'center',
   },

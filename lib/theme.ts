@@ -8,6 +8,7 @@ export const palette = {
     raised: '#0D0F12',
     surface: '#111417',
     surfaceRaised: '#171A1E',
+    hero: '#12151A',
   },
   border: {
     subtle: '#22272D',
@@ -22,6 +23,7 @@ export const palette = {
   accent: {
     primary: '#54FF00',
     primaryPressed: '#46D400',
+    soft: 'rgba(84, 255, 0, 0.12)',
     danger: '#FF0044',
     dangerPressed: '#CC0036',
   },
@@ -52,6 +54,8 @@ export const radius = {
 } as const;
 
 export const typography = {
+  display: { size: 32, weight: '700', lineHeight: 38 },
+  plate: { size: 20, weight: '600', lineHeight: 26 },
   hero: { size: 26, weight: '700', lineHeight: 32 },
   h1: { size: 24, weight: '700', lineHeight: 30 },
   h2: { size: 22, weight: '700', lineHeight: 28 },

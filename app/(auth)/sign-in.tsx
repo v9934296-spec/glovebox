@@ -1,14 +1,13 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Link, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button, Field } from '@/components/ui';
 import { useAuth } from '@/lib/auth/session';
 import { palette, spacing, typography } from '@/lib/theme';
 
 export default function SignInScreen() {
   const router = useRouter();
-  const { signIn } = useAuth();
+  const { signIn, continueWithoutAccount } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -27,16 +26,15 @@ export default function SignInScreen() {
     }
   }
 
+  async function onContinueLocal() {
+    await continueWithoutAccount();
+    router.replace('/');
+  }
+
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.hero}>
-          <Ionicons name="car-sport" size={44} color={palette.accent.primary} />
-          <Text style={styles.title}>Glovebox</Text>
-          <Text style={styles.tagline}>
-            Your car's memory, maintenance plan, and repair history in one app.
-          </Text>
-        </View>
+        <Text style={styles.brand}>Glovebox</Text>
 
         <Field
           label="Email"
@@ -57,14 +55,22 @@ export default function SignInScreen() {
         />
         {error != null && <Text style={styles.error}>{error}</Text>}
 
-        <Button title="Sign in" onPress={onSignIn} loading={busy} disabled={!email.trim() || !password} />
+        <Button title="Sign in" onPress={() => void onSignIn()} loading={busy} disabled={!email.trim() || !password} />
 
         <View style={styles.links}>
+          <Link href="/(auth)/forgot-password" style={styles.link}>
+            Forgot password?
+          </Link>
           <Link href="/(auth)/sign-up" style={styles.link}>
             Create account
           </Link>
         </View>
 
+        <View style={styles.divider} />
+
+        <Pressable onPress={() => void onContinueLocal()} hitSlop={8}>
+          <Text style={styles.localLink}>Continue without account</Text>
+        </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -73,19 +79,13 @@ export default function SignInScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.bg.app },
   content: { padding: spacing.screenPadding, paddingTop: 80, paddingBottom: spacing['2xl'] },
-  hero: { alignItems: 'center', marginBottom: spacing['2xl'] },
-  title: {
+  brand: {
     color: palette.text.primary,
-    fontSize: typography.h1.size,
-    fontWeight: typography.h1.weight,
-    marginTop: spacing.sm,
-  },
-  tagline: {
-    color: palette.text.secondary,
-    fontSize: typography.body.size,
+    fontSize: typography.display.size,
+    fontWeight: typography.display.weight,
+    lineHeight: typography.display.lineHeight,
+    marginBottom: spacing['2xl'],
     textAlign: 'center',
-    marginTop: spacing.sm,
-    lineHeight: typography.body.lineHeight,
   },
   error: { color: palette.status.overdue, fontSize: typography.caption.size, marginBottom: spacing.md },
   links: {
@@ -94,4 +94,15 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   link: { color: palette.accent.primary, fontSize: typography.caption.size, fontWeight: '600' },
+  divider: {
+    height: 1,
+    backgroundColor: palette.border.subtle,
+    marginVertical: spacing.xl,
+  },
+  localLink: {
+    color: palette.text.tertiary,
+    fontSize: typography.caption.size,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
 });

@@ -56,6 +56,7 @@ export default function SignUpScreen() {
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <Text style={styles.intro}>Create an account to back up your garage across devices.</Text>
         <Field
           label="Email"
           placeholder="you@example.com"
@@ -117,6 +118,12 @@ export default function SignUpScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.bg.app },
   content: { padding: spacing.screenPadding, paddingTop: spacing.xl, paddingBottom: spacing['2xl'] },
+  intro: {
+    color: palette.text.secondary,
+    fontSize: typography.body.size,
+    lineHeight: typography.body.lineHeight,
+    marginBottom: spacing.lg,
+  },
   error: { color: palette.status.overdue, fontSize: typography.caption.size, marginBottom: spacing.md },
   hint: {
     color: palette.text.tertiary,

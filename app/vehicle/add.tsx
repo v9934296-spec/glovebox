@@ -2,14 +2,14 @@ import { Stack, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
-import { Button, Card, EmptyState, Field, PhotoTile, Screen, SectionHeader } from '@/components/ui';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Button, EmptyState, Field, PhotoTile, Screen, SectionLabel } from '@/components/ui';
 import { useVehicles } from '@/lib/db/hooks';
 import { createVehicle } from '@/lib/db/vehicleRepo';
 import { validateVin } from '@/lib/domain/vin';
 import { canAddVehicle } from '@/lib/monetization/entitlements';
 import { useIsPro } from '@/lib/monetization/purchases';
-import { palette, spacing } from '@/lib/theme';
+import { palette, spacing, typography } from '@/lib/theme';
 
 type FormValues = {
   nickname: string;
@@ -90,14 +90,10 @@ export default function AddVehicleScreen() {
     return (
       <Screen>
         <EmptyState
-          title="Garage is full (free plan)"
+          title="Garage is full"
           message={gate.reason}
-          action={
-            <View style={{ gap: spacing.md }}>
-              <Button title="Upgrade to Pro" onPress={() => router.push('/paywall')} />
-              <Button title="Not now" variant="ghost" onPress={() => router.back()} />
-            </View>
-          }
+          icon="car-outline"
+          action={<Button title="See Pro" onPress={() => router.push('/paywall')} />}
         />
       </Screen>
     );
@@ -108,13 +104,13 @@ export default function AddVehicleScreen() {
       <Stack.Screen options={{ title: 'Add vehicle' }} />
       <ScrollView
         style={{ flex: 1, backgroundColor: palette.bg.app }}
-        contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'] }}
+        contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'], gap: spacing.xl }}
         keyboardShouldPersistTaps="handled"
       >
-        <PhotoTile uri={photoUri} emptyLabel="Add photo" onPress={() => void pickPhoto()} height={220} />
+        <PhotoTile uri={photoUri} emptyLabel="Add photo" emptyIcon="car-outline" onPress={() => void pickPhoto()} height={160} />
 
-        <SectionHeader title="Basics" />
-        <Card>
+        <View>
+          <SectionLabel title="Vehicle" />
           <Controller
             control={control}
             name="nickname"
@@ -197,7 +193,7 @@ export default function AddVehicleScreen() {
                 name="trim"
                 render={({ field }) => (
                   <Field
-                    label="Trim (optional)"
+                    label="Trim"
                     placeholder="EX-L"
                     value={field.value}
                     onChangeText={field.onChange}
@@ -213,7 +209,7 @@ export default function AddVehicleScreen() {
             rules={{ required: 'Current mileage is required' }}
             render={({ field, fieldState }) => (
               <Field
-                label="Current mileage"
+                label="Mileage"
                 placeholder="82000"
                 keyboardType="number-pad"
                 value={field.value}
@@ -223,10 +219,10 @@ export default function AddVehicleScreen() {
               />
             )}
           />
-        </Card>
+        </View>
 
-        <SectionHeader title="Identification (optional)" />
-        <Card>
+        <View>
+          <SectionLabel title="Identifiers" />
           <Controller
             control={control}
             name="licensePlate"
@@ -263,10 +259,11 @@ export default function AddVehicleScreen() {
               />
             )}
           />
-        </Card>
+          <Text style={styles.vinHint}>We'll decode make/model when possible</Text>
+        </View>
 
-        <SectionHeader title="Purchase (optional)" />
-        <Card>
+        <View>
+          <SectionLabel title="Optional" />
           <Controller
             control={control}
             name="purchaseDate"
@@ -298,9 +295,9 @@ export default function AddVehicleScreen() {
               />
             )}
           />
-        </Card>
+        </View>
 
-        <Button title="Add vehicle" onPress={onSubmit} style={{ marginTop: spacing.xl }} />
+        <Button title="Save vehicle" onPress={onSubmit} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -308,4 +305,9 @@ export default function AddVehicleScreen() {
 
 const styles = StyleSheet.create({
   twoCol: { flexDirection: 'row', gap: spacing.md },
+  vinHint: {
+    color: palette.text.tertiary,
+    fontSize: typography.caption.size,
+    marginTop: spacing.sm,
+  },
 });

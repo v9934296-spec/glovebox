@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Field, SectionHeader } from '@/components/ui';
+import { Button, Card, EmptyState, Field, SectionLabel } from '@/components/ui';
 import { aiAvailability, checkCost, explainRepair } from '@/lib/ai/client';
 import type { CostCheck, CostVerdict, DiyDifficulty, RepairExplanation, Urgency } from '@/lib/ai/parse';
 import { useVehicle } from '@/lib/db/hooks';
@@ -143,8 +143,8 @@ export default function AiAssistantScreen() {
         </View>
 
         {explanation != null && (
-          <>
-            <SectionHeader title="What it is" />
+          <View style={{ marginTop: spacing.xl }}>
+            <SectionLabel title="What it is" />
             <Card>
               <View style={styles.badgeRow}>
                 <Badge {...URGENCY_BADGE[explanation.urgency]} />
@@ -164,12 +164,12 @@ export default function AiAssistantScreen() {
                 </>
               )}
             </Card>
-          </>
+          </View>
         )}
 
         {costCheck != null && (
-          <>
-            <SectionHeader title="Price check" />
+          <View style={{ marginTop: spacing.xl }}>
+            <SectionLabel title="Price check" />
             <Card>
               <View style={styles.badgeRow}>
                 <Badge {...VERDICT_BADGE[costCheck.verdict]} />
@@ -186,7 +186,7 @@ export default function AiAssistantScreen() {
                 </Text>
               ))}
             </Card>
-          </>
+          </View>
         )}
 
         {(explanation != null || costCheck != null) && (

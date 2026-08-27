@@ -1,27 +1,35 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
+  AttentionRow,
   Button,
   Card,
-  DueBadge,
   EmptyState,
   IconCircle,
   kindAccent,
   ListRow,
-  MetricCard,
+  MetricStrip,
   Screen,
-  SectionHeader,
+  SectionLabel,
+  healthRingColor,
   serviceTypeIcon,
-  VehicleHeroCard,
 } from '@/components/ui';
 import { useAllServiceRecords, useReminders, useVehicles } from '@/lib/db/hooks';
 import { dueSummary, reminderDueState, todayIso, type DueState } from '@/lib/domain/due';
 import { formatMoney, summarizeExpenses } from '@/lib/domain/expenses';
 import { healthScore } from '@/lib/domain/healthScore';
 import { serviceTypeDef, serviceTypeLabel } from '@/lib/domain/serviceTypes';
-import { palette, spacing, typography } from '@/lib/theme';
+import type { Vehicle } from '@/lib/domain/types';
+import { palette, radius, spacing, typography } from '@/lib/theme';
+
+const BLOCK_GAP = 28;
+
+function formatMileageShort(miles: number): string {
+  if (miles >= 1000) return `${Math.round(miles / 1000)}k mi`;
+  return `${miles.toLocaleString()} mi`;
+}
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -47,21 +55,24 @@ export default function DashboardScreen() {
 
   const expenses = useMemo(() => summarizeExpenses(allRecords, today), [allRecords, today]);
   const recentRecords = allRecords.slice(0, 3);
-  const hero = vehicles[0];
-  const heroHealth = useMemo(() => {
-    if (!hero) return null;
-    const records = allRecords.filter((r) => r.vehicleId === hero.id);
-    const reminders = activeReminders.filter((r) => r.vehicleId === hero.id);
-    return healthScore({ vehicle: hero, records, reminders, today });
-  }, [hero, allRecords, activeReminders, today]);
+
+  const garagePreview = useMemo(() => {
+    return vehicles.slice(0, 3).map((vehicle) => {
+      const records = allRecords.filter((r) => r.vehicleId === vehicle.id);
+      const reminders = activeReminders.filter((r) => r.vehicleId === vehicle.id);
+      const health = healthScore({ vehicle, records, reminders, today });
+      return { vehicle, score: health.score };
+    });
+  }, [vehicles, allRecords, activeReminders, today]);
 
   if (vehicles.length === 0) {
     return (
       <Screen>
         <EmptyState
           title="Welcome to Glovebox"
-          message="Your car's memory, maintenance plan, and repair history in one app. Add your first vehicle to get started."
-          action={<Button title="Add your vehicle" onPress={() => router.push('/vehicle/add')} />}
+          message="Your car’s memory and maintenance plan in one place."
+          icon="car-outline"
+          action={<Button title="Add your car" onPress={() => router.push('/vehicle/add')} />}
         />
       </Screen>
     );
@@ -69,71 +80,72 @@ export default function DashboardScreen() {
 
   return (
     <Screen style={{ padding: 0 }}>
-      <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'] }}>
-        {hero != null && heroHealth != null && (
-          <VehicleHeroCard
-            photoUri={hero.photoUri}
-            title={hero.nickname}
-            subtitle={`${hero.year} ${hero.make} ${hero.model}`}
-            meta={
-              <Text style={styles.heroMileage}>{hero.mileage.toLocaleString()} mi</Text>
-            }
-            health={{ score: heroHealth.score, label: heroHealth.label }}
-            cta={{ label: 'View Garage', onPress: () => router.push('/garage') }}
-          />
-        )}
-
-        <SectionHeader
-          title="Needs attention"
-          right={
-            <Pressable onPress={() => router.push('/reminders')}>
-              <Text style={styles.link}>All reminders</Text>
-            </Pressable>
-          }
+      <ScrollView
+        contentContainerStyle={{
+          padding: spacing.screenPadding,
+          paddingBottom: spacing['2xl'],
+          gap: BLOCK_GAP,
+        }}
+      >
+        <MetricStrip
+          items={[
+            { label: 'This month', value: formatMoney(expenses.monthTotal) },
+            { label: 'This year', value: formatMoney(expenses.yearTotal) },
+          ]}
         />
-        {attention.length === 0 ? (
-          <Card>
-            <View style={styles.allGood}>
-              <Ionicons name="checkmark-circle-outline" size={20} color={palette.status.ok} />
-              <Text style={styles.allGoodText}>Nothing overdue. You're on top of it.</Text>
-            </View>
-          </Card>
-        ) : (
-          <View style={{ gap: spacing.sm }}>
-            {attention.map(({ reminder, vehicle, state }) => (
-              <Pressable
-                key={reminder.id}
-                onPress={() => router.push({ pathname: '/vehicle/[id]', params: { id: vehicle.id } })}
-              >
-                <Card style={styles.attentionCard}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.attentionTitle}>{reminder.title}</Text>
-                    <Text style={styles.attentionMeta}>
-                      {vehicle.nickname} ·{' '}
-                      {dueSummary({
-                        dueDate: reminder.dueDate,
-                        dueMileage: reminder.dueMileage,
-                        currentMileage: vehicle.mileage,
-                        today,
-                      })}
-                    </Text>
-                  </View>
-                  <DueBadge state={state} />
-                </Card>
-              </Pressable>
-            ))}
-          </View>
-        )}
 
-        <SectionHeader title="Overview" />
-        <View style={styles.statRow}>
-          <MetricCard label="Total Spent" value={formatMoney(expenses.lifetimeTotal)} />
-          <MetricCard label="Services" value={String(allRecords.length)} />
+        <View>
+          <SectionLabel
+            title="Needs attention"
+            actionLabel="See all"
+            onAction={() => router.push('/reminders')}
+          />
+          {attention.length === 0 ? (
+            <View style={styles.clearRow}>
+              <Ionicons name="checkmark-circle" size={18} color={palette.status.ok} />
+              <Text style={styles.clearText}>You're clear — nothing overdue or due soon</Text>
+            </View>
+          ) : (
+            <View>
+              {attention.map(({ reminder, vehicle, state }, i) => (
+                <AttentionRow
+                  key={reminder.id}
+                  title={reminder.title}
+                  meta={`${vehicle.nickname} · ${dueSummary({
+                    dueDate: reminder.dueDate,
+                    dueMileage: reminder.dueMileage,
+                    currentMileage: vehicle.mileage,
+                    today,
+                  })}`}
+                  state={state}
+                  showSeparator={i < attention.length - 1}
+                  onPress={() => router.push({ pathname: '/vehicle/[id]', params: { id: vehicle.id } })}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+
+        <View>
+          <SectionLabel
+            title="Garage"
+            actionLabel={vehicles.length > 3 ? 'See garage' : undefined}
+            onAction={vehicles.length > 3 ? () => router.push('/garage') : undefined}
+          />
+          {garagePreview.map(({ vehicle, score }, i) => (
+            <CompactGarageRow
+              key={vehicle.id}
+              vehicle={vehicle}
+              score={score}
+              showSeparator={i < garagePreview.length - 1}
+              onPress={() => router.push({ pathname: '/vehicle/[id]', params: { id: vehicle.id } })}
+            />
+          ))}
         </View>
 
         {recentRecords.length > 0 && (
-          <>
-            <SectionHeader title="Recent services" />
+          <View>
+            <SectionLabel title="Recent activity" />
             <Card style={{ paddingVertical: spacing.sm, paddingHorizontal: spacing.md }}>
               {recentRecords.map((r, i) => {
                 const kind = serviceTypeDef(r.serviceType).kind;
@@ -157,7 +169,7 @@ export default function DashboardScreen() {
                 );
               })}
             </Card>
-          </>
+          </View>
         )}
 
         <View style={styles.quickActions}>
@@ -174,23 +186,95 @@ export default function DashboardScreen() {
   );
 }
 
+function CompactGarageRow({
+  vehicle,
+  score,
+  showSeparator,
+  onPress,
+}: {
+  vehicle: Vehicle;
+  score: number;
+  showSeparator?: boolean;
+  onPress: () => void;
+}) {
+  const plate = `${vehicle.year} ${vehicle.make} ${vehicle.model}`.trim();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={[styles.compactRow, showSeparator && styles.compactRowSep]}
+    >
+      {vehicle.photoUri ? (
+        <Image source={{ uri: vehicle.photoUri }} style={styles.compactPhoto} />
+      ) : (
+        <View style={[styles.compactPhoto, styles.compactPhotoPlaceholder]}>
+          <Ionicons name="car-sport" size={18} color={palette.text.tertiary} />
+        </View>
+      )}
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={styles.compactTitle} numberOfLines={1}>
+          {vehicle.nickname}
+        </Text>
+        <Text style={styles.compactMeta} numberOfLines={1}>
+          {formatMileageShort(vehicle.mileage)} · {plate}
+        </Text>
+      </View>
+      <Text style={[styles.compactScore, { color: healthRingColor(score) }]}>{score}</Text>
+      <Ionicons name="chevron-forward" size={16} color={palette.text.tertiary} />
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  statRow: { flexDirection: 'row', gap: spacing.md },
-  link: { color: palette.accent.primary, fontSize: typography.caption.size, fontWeight: '600' },
-  allGood: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  allGoodText: { color: palette.text.secondary, fontSize: typography.body.size, flex: 1 },
-  attentionCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
-  attentionTitle: {
+  clearRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  clearText: {
+    color: palette.text.secondary,
+    fontSize: typography.body.size,
+    flex: 1,
+  },
+  compactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  compactRowSep: {
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border.subtle,
+  },
+  compactPhoto: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.sm,
+  },
+  compactPhotoPlaceholder: {
+    backgroundColor: palette.bg.hero,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactTitle: {
     color: palette.text.primary,
     fontSize: typography.bodyEmphasis.size,
     fontWeight: typography.bodyEmphasis.weight,
   },
-  attentionMeta: { color: palette.text.tertiary, fontSize: typography.meta.size, marginTop: 2 },
-  heroMileage: { color: palette.text.secondary, fontSize: typography.body.size },
+  compactMeta: {
+    color: palette.text.tertiary,
+    fontSize: typography.caption.size,
+    marginTop: 2,
+  },
+  compactScore: {
+    fontSize: typography.bodyEmphasis.size,
+    fontWeight: typography.bodyEmphasis.weight,
+  },
   rowPad: { paddingVertical: spacing.sm },
   rowDivider: {
     borderBottomWidth: 1,
     borderBottomColor: palette.border.subtle,
   },
-  quickActions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xl },
+  quickActions: { flexDirection: 'row', gap: spacing.md },
 });
