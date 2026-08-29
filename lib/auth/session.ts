@@ -6,6 +6,7 @@ import { resetAllData } from '../db/database';
 import { identifyPurchasesUser } from '../monetization/purchases';
 import { getSupabase, isSupabaseConfigured } from '../supabase';
 import { runPostDeletionTeardown } from './deletion';
+import { applyIfEpochMatches } from './epoch';
 import type { AuthStatus } from './ownership';
 
 const LOCAL_ONLY_KEY = 'glovebox.localOnly';
@@ -25,15 +26,29 @@ type AuthState = {
 };
 
 let authEpoch = 0;
+let authListener: { unsubscribe: () => void } | null = null;
+
+type AuthSnapshot = Pick<AuthState, 'status' | 'session'>;
+
+/**
+ * Commit auth status only if `epoch` is still the live counter. The compare
+ * happens inside Zustand's updater so it cannot interleave with sign-out.
+ */
+function setIfCurrentEpoch(
+  set: (updater: (state: AuthState) => AuthState) => void,
+  epoch: number,
+  next: AuthSnapshot,
+): void {
+  set((state) => applyIfEpochMatches(epoch, authEpoch, state, { ...state, ...next }));
+}
 
 async function enterSignedIn(
   session: Session,
-  set: (partial: { status: AuthStatus; session: Session | null }) => void,
+  set: (updater: (state: AuthState) => AuthState) => void,
   epoch: number,
 ): Promise<void> {
   await ensureDatabaseOwnership(session.user.id);
-  if (epoch !== authEpoch) return;
-  set({ status: 'signedIn', session });
+  setIfCurrentEpoch(set, epoch, { status: 'signedIn', session });
 }
 
 export const useAuth = create<AuthState>((set, get) => ({
@@ -52,22 +67,26 @@ export const useAuth = create<AuthState>((set, get) => ({
       try {
         await enterSignedIn(data.session, set, epoch);
       } catch {
-        if (epoch === authEpoch) set({ status: 'signedOut', session: null });
+        setIfCurrentEpoch(set, epoch, { status: 'signedOut', session: null });
       }
     } else {
       set({ status: 'signedOut', session: null });
     }
-    supabase.auth.onAuthStateChange((_event, session) => {
+    authListener?.unsubscribe();
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
         const epoch = ++authEpoch;
         void enterSignedIn(session, set, epoch).catch(() => {
-          if (epoch === authEpoch) set({ status: 'signedOut', session: null });
+          setIfCurrentEpoch(set, epoch, { status: 'signedOut', session: null });
         });
-      } else if (get().status === 'signedIn') {
+      } else {
         authEpoch += 1;
-        set({ status: 'signedOut', session: null });
+        if (get().status !== 'localOnly') {
+          set({ status: 'signedOut', session: null });
+        }
       }
     });
+    authListener = listener.subscription;
   },
 
   signIn: async (email, password) => {
@@ -90,12 +109,18 @@ export const useAuth = create<AuthState>((set, get) => ({
     const { error } = await getSupabase().auth.signOut();
     if (error) throw new Error(error.message);
     authEpoch += 1;
-    await identifyPurchasesUser(null);
     set({ status: 'signedOut', session: null });
+    await identifyPurchasesUser(null);
+    const signedInAgain = get().session?.user.id;
+    if (signedInAgain) {
+      await identifyPurchasesUser(signedInAgain);
+      return;
+    }
     await AsyncStorage.removeItem(LOCAL_ONLY_KEY);
   },
 
   continueWithoutAccount: async () => {
+    authEpoch += 1;
     await AsyncStorage.setItem(LOCAL_ONLY_KEY, '1');
     set({ status: 'localOnly' });
   },

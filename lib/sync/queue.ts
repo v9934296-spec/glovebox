@@ -49,6 +49,18 @@ export function getSyncState(key: string): string | null {
   return row?.value ?? null;
 }
 
+/**
+ * Insert a sync_state row only if the key is new. Returns true iff this
+ * caller created it — used to claim one-shot work like first-sync backfill.
+ */
+export function claimSyncState(key: string, value: string): boolean {
+  const result = getDb().runSync('INSERT OR IGNORE INTO sync_state (key, value) VALUES (?, ?)', [
+    key,
+    value,
+  ]);
+  return result.changes > 0;
+}
+
 export function setSyncState(key: string, value: string) {
   getDb().runSync(
     'INSERT INTO sync_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',

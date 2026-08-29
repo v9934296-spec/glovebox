@@ -17,6 +17,9 @@ importers:
       '@react-native-async-storage/async-storage':
         specifier: ^2.2.0
         version: 2.2.0(react-native@0.83.10(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.0))
+      '@react-native-community/datetimepicker':
+        specifier: 8.6.0
+        version: 8.6.0(expo@55.0.28)(react-native@0.83.10(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
       '@supabase/supabase-js':
         specifier: ^2.110.0
         version: 2.110.0
@@ -26,6 +29,9 @@ importers:
       expo-constants:
         specifier: ~55.0.17
         version: 55.0.17(expo@55.0.28)(react-native@0.83.10(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.0))
+      expo-crypto:
+        specifier: ~55.0.19
+        version: 55.0.19(expo@55.0.28)
       expo-dev-client:
         specifier: ~55.0.37
         version: 55.0.37(expo@55.0.28)
@@ -1129,6 +1135,19 @@ packages:
     peerDependencies:
       react-native: ^0.0.0-0 || >=0.65 <1.0
 
+  '@react-native-community/datetimepicker@8.6.0':
+    resolution: {integrity: sha512-yxPSqNfxgpGaqHQIpatqe6ykeBdU/1pdsk/G3x01mY2bpTflLpmVTLqFSJYd3MiZzxNZcMs/j1dQakUczSjcYA==}
+    peerDependencies:
+      expo: '>=52.0.0'
+      react: '*'
+      react-native: '*'
+      react-native-windows: '*'
+    peerDependenciesMeta:
+      expo:
+        optional: true
+      react-native-windows:
+        optional: true
+
   '@react-native/assets-registry@0.83.10':
     resolution: {integrity: sha512-AcVfyQ+8HsWCecXEnSaRffP71KqaWrhNB8bLulYCpKO7i5h/lmwgF191uafU/WiS0LbEMTGlXwWBshPto1phyA==}
     engines: {node: '>= 20.19.4'}
@@ -1994,6 +2013,11 @@ packages:
     peerDependencies:
       expo: '*'
       react-native: '*'
+
+  expo-crypto@55.0.19:
+    resolution: {integrity: sha512-Ip1jQ5GphvrC4Ls5osAmIapi+JZXOqRJYaaMxTFWpkhssNUq88oP45pWGv2uU2K/Ci6j7iLDJzU8eN3v+B7jrA==}
+    peerDependencies:
+      expo: '*'
 
   expo-dev-client@55.0.37:
     resolution: {integrity: sha512-FA5dMuo653p02fAG4gWRSRaERP3jXIfpVngAE2F9pZLe0wHHJAbIlNWrr+TdaIRQ0xX02FTyLkXOgxvxSqku2w==}
@@ -5270,6 +5294,14 @@ snapshots:
       merge-options: 3.0.4
       react-native: 0.83.10(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.0)
 
+  '@react-native-community/datetimepicker@8.6.0(expo@55.0.28)(react-native@0.83.10(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)':
+    dependencies:
+      invariant: 2.2.4
+      react: 19.2.0
+      react-native: 0.83.10(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.0)
+    optionalDependencies:
+      expo: 55.0.28(@babel/core@7.29.7)(@expo/dom-webview@55.0.6)(@expo/metro-runtime@55.0.12)(expo-router@55.0.17)(react-dom@19.2.0(react@19.2.0))(react-native@0.83.10(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)(typescript@5.9.3)
+
   '@react-native/assets-registry@0.83.10': {}
 
   '@react-native/babel-plugin-codegen@0.83.10(@babel/core@7.29.7)':
@@ -6244,6 +6276,10 @@ snapshots:
       react-native: 0.83.10(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.0)
     transitivePeerDependencies:
       - supports-color
+
+  expo-crypto@55.0.19(expo@55.0.28):
+    dependencies:
+      expo: 55.0.28(@babel/core@7.29.7)(@expo/dom-webview@55.0.6)(@expo/metro-runtime@55.0.12)(expo-router@55.0.17)(react-dom@19.2.0(react@19.2.0))(react-native@0.83.10(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)(typescript@5.9.3)
 
   expo-dev-client@55.0.37(expo@55.0.28):
     dependencies:

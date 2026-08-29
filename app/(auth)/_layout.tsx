@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 import React from 'react';
+import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { palette } from '@/lib/theme';
 
 export default function AuthLayout() {
@@ -10,6 +11,8 @@ export default function AuthLayout() {
         headerShadowVisible: false,
         headerTintColor: palette.text.primary,
         contentStyle: { backgroundColor: palette.bg.app },
+        headerBackVisible: false,
+        headerLeft: () => <HeaderBackButton fallback="/(auth)/sign-in" />,
       }}
     >
       <Stack.Screen name="sign-in" options={{ headerShown: false }} />

@@ -1,3 +1,4 @@
+import { randomUUID } from 'expo-crypto';
 import { openDatabaseSync, type SQLiteDatabase } from 'expo-sqlite';
 import { create } from 'zustand';
 
@@ -124,9 +125,9 @@ export function resetAllData() {
   bumpDataVersion();
 }
 
+/** Cryptographically random UUID v4 — not Math.random(), not time-based. */
 export function newId(): string {
-  const rand = () => Math.random().toString(36).slice(2, 10);
-  return `${Date.now().toString(36)}-${rand()}-${rand()}`;
+  return randomUUID();
 }
 
 export function nowIso(): string {

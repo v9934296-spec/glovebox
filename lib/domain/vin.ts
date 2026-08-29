@@ -129,3 +129,14 @@ export function recallStatus(args: { checkedAt: string | null; recalls: Recall[]
   if (args.checkedAt == null) return 'unknown';
   return args.recalls.length > 0 ? 'open' : 'none';
 }
+
+type YearMakeModel = { make: string; model: string; year: number };
+
+/** NHTSA recall results are keyed by year/make/model, not VIN. */
+export function recallLookupKey(vehicle: YearMakeModel): string {
+  return `${vehicle.year}|${vehicle.make.trim().toLowerCase()}|${vehicle.model.trim().toLowerCase()}`;
+}
+
+export function sameRecallLookup(a: YearMakeModel, b: YearMakeModel): boolean {
+  return recallLookupKey(a) === recallLookupKey(b);
+}

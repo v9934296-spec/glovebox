@@ -125,14 +125,46 @@ export function updateVehicleVinDecode(id: string, vin: string, decoded: Decoded
   bumpDataVersion();
 }
 
-/** Persists a recall check result. An empty array with a fresh timestamp means "checked, none open". */
-export function updateVehicleRecalls(id: string, recalls: Recall[]) {
+const YMM_WHERE = `deleted_at IS NULL
+       AND lower(trim(make)) = lower(trim(?))
+       AND lower(trim(model)) = lower(trim(?))
+       AND year = ?`;
+
+/**
+ * NHTSA recalls are per year/make/model, so every local car of that type
+ * gets the same result — one check must not leave a twin showing "unknown".
+ *
+ * Twins get recall columns only (no updated_at / enqueue) so last-write-wins
+ * sync cannot overwrite a twin's pending mileage or photo edit. `sourceId`
+ * is the car that was actually checked and is the only row pushed.
+ */
+export function applyRecallCheck(
+  key: { make: string; model: string; year: number },
+  recalls: Recall[],
+  sourceId?: string,
+) {
   const ts = nowIso();
-  getDb().runSync(
-    'UPDATE vehicles SET recall_checked_at = ?, recall_json = ?, updated_at = ? WHERE id = ?',
-    [ts, JSON.stringify(recalls), ts, id],
+  const json = JSON.stringify(recalls);
+  const db = getDb();
+  const ymm = [key.make, key.model, key.year] as const;
+  const matches = db.getAllSync<{ id: string }>(
+    `SELECT id FROM vehicles WHERE ${YMM_WHERE}`,
+    [...ymm],
   );
-  enqueueChange('vehicles', id);
+  if (matches.length === 0) return;
+  db.withTransactionSync(() => {
+    db.runSync(
+      `UPDATE vehicles SET recall_checked_at = ?, recall_json = ? WHERE ${YMM_WHERE}`,
+      [ts, json, ...ymm],
+    );
+    if (sourceId && matches.some((row) => row.id === sourceId)) {
+      db.runSync('UPDATE vehicles SET updated_at = ? WHERE id = ? AND deleted_at IS NULL', [
+        ts,
+        sourceId,
+      ]);
+      enqueueChange('vehicles', sourceId);
+    }
+  });
   bumpDataVersion();
 }
 

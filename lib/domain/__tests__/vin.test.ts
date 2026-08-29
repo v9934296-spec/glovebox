@@ -6,6 +6,7 @@ import {
   parseDecodedVin,
   parseRecalls,
   recallStatus,
+  sameRecallLookup,
   validateVin,
 } from '../vin';
 import type { DecodedVin, Recall } from '../types';
@@ -192,5 +193,22 @@ describe('recallStatus', () => {
       { id: 'A', component: null, summary: null, consequence: null, remedy: null, reportedDate: null },
     ];
     expect(recallStatus({ checkedAt: '2026-07-01T00:00:00Z', recalls })).toBe('open');
+  });
+});
+
+describe('sameRecallLookup', () => {
+  const civic = { make: 'Honda', model: 'Civic', year: 2020 };
+
+  it('treats identical year/make/model as the same NHTSA key', () => {
+    expect(sameRecallLookup(civic, { make: 'Honda', model: 'Civic', year: 2020 })).toBe(true);
+  });
+
+  it('ignores casing and surrounding whitespace', () => {
+    expect(sameRecallLookup(civic, { make: ' honda ', model: 'CIVIC', year: 2020 })).toBe(true);
+  });
+
+  it('does not match a different year or model', () => {
+    expect(sameRecallLookup(civic, { make: 'Honda', model: 'Civic', year: 2021 })).toBe(false);
+    expect(sameRecallLookup(civic, { make: 'Honda', model: 'Accord', year: 2020 })).toBe(false);
   });
 });

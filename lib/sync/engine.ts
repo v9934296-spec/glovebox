@@ -8,7 +8,9 @@ import { bumpDataVersion, getDb, nowIso } from '../db/database';
 import { isSupabaseConfigured, getSupabase } from '../supabase';
 import { ensureLocalMedia, uploadRowMedia } from './media';
 import { coalesceQueue, laterTimestamp, shouldApplyRemote } from './merge';
+import { coalesceExclusive, createAsyncMutex } from './mutex';
 import {
+  claimSyncState,
   clearQueueEntries,
   enqueueChange,
   getSyncState,
@@ -88,16 +90,20 @@ function getLocalRow(table: SyncTable, rowId: string): LocalRow | null {
 /**
  * First sync for a user: queue local rows that already belong to this
  * authenticated, bound account. Must not run until ownership is verified.
+ *
+ * The backfilled flag is claimed with INSERT OR IGNORE in the same
+ * transaction as the enqueue, so a second pass cannot queue every row again.
  */
 function backfillIfNeeded(userId: string, boundUserId: string | null) {
   if (!canSyncAsUser(boundUserId, userId)) return;
   const key = `backfilled:${userId}`;
-  if (getSyncState(key) === '1') return;
-  for (const table of SYNC_TABLES) {
-    const rows = getDb().getAllSync<{ id: string }>(`SELECT id FROM ${table}`);
-    for (const row of rows) enqueueChange(table, row.id);
-  }
-  setSyncState(key, '1');
+  getDb().withTransactionSync(() => {
+    if (!claimSyncState(key, '1')) return;
+    for (const table of SYNC_TABLES) {
+      const rows = getDb().getAllSync<{ id: string }>(`SELECT id FROM ${table}`);
+      for (const row of rows) enqueueChange(table, row.id);
+    }
+  });
 }
 
 async function pushQueue(userId: string) {
@@ -200,19 +206,9 @@ async function pullChanges(userId: string) {
   if (applied > 0) bumpDataVersion();
 }
 
-let syncing = false;
-let syncAgainRequested = false;
-
-/** Full sync pass: backfill (first run per user) → push queue → pull changes. */
-export async function syncNow(): Promise<void> {
-  if (!isSupabaseConfigured) return;
+async function runSyncPass(): Promise<void> {
   const userId = currentUserId();
   if (!userId) return;
-  if (syncing) {
-    syncAgainRequested = true;
-    return;
-  }
-  syncing = true;
   useSyncStatus.setState({ syncing: true, error: null });
   try {
     const network = await Network.getNetworkStateAsync();
@@ -226,13 +222,21 @@ export async function syncNow(): Promise<void> {
   } catch (e) {
     useSyncStatus.setState({ error: e instanceof Error ? e.message : 'Sync failed' });
   } finally {
-    syncing = false;
     refreshStatus({ syncing: false });
-    if (syncAgainRequested) {
-      syncAgainRequested = false;
-      void syncNow();
-    }
   }
+}
+
+const runCoalescedSync = coalesceExclusive(createAsyncMutex(), runSyncPass);
+
+/**
+ * Full sync pass: backfill (first run per user) → push queue → pull changes.
+ * Concurrent callers share one in-flight pass (plus at most one trailing pass)
+ * so AppState bursts cannot queue N full syncs. The mutex still prevents two
+ * passes from overlapping around an await.
+ */
+export async function syncNow(): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  await runCoalescedSync();
 }
 
 const DEBOUNCE_MS = 3000;

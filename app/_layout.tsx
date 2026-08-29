@@ -2,6 +2,8 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { AppErrorBoundary } from '@/components/AppErrorBoundary';
+import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { canAccessApp } from '@/lib/auth/ownership';
 import { useAuth } from '@/lib/auth/session';
 import { getDb } from '@/lib/db/database';
@@ -13,6 +15,14 @@ import { palette } from '@/lib/theme';
 getDb();
 
 export default function RootLayout() {
+  return (
+    <AppErrorBoundary>
+      <RootLayoutContent />
+    </AppErrorBoundary>
+  );
+}
+
+function RootLayoutContent() {
   const status = useAuth((s) => s.status);
   const session = useAuth((s) => s.session);
   const initialize = useAuth((s) => s.initialize);
@@ -56,13 +66,15 @@ export default function RootLayout() {
           headerTintColor: palette.text.primary,
           headerTitleStyle: { fontWeight: '600' },
           contentStyle: { backgroundColor: palette.bg.app },
+          headerBackVisible: false,
+          headerLeft: () => <HeaderBackButton />,
         }}
       >
         <Stack.Protected guard={hasAppAccess}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="vehicle/add" options={{ presentation: 'modal', title: 'Add vehicle' }} />
           <Stack.Screen name="vehicle/[id]" options={{ title: 'Vehicle' }} />
-          <Stack.Screen name="service/add" options={{ presentation: 'modal', title: 'Add Service' }} />
+          <Stack.Screen name="service/log" options={{ presentation: 'modal', headerShown: false }} />
           <Stack.Screen name="reminder/add" options={{ presentation: 'modal', title: 'New reminder' }} />
           <Stack.Screen name="ai/assistant" options={{ presentation: 'modal', title: 'AI assistant' }} />
           <Stack.Screen name="paywall" options={{ presentation: 'modal', title: 'Glovebox Pro' }} />

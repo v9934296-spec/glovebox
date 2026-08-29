@@ -173,7 +173,7 @@ export default function DashboardScreen() {
         )}
 
         <View style={styles.quickActions}>
-          <Button title="Log service" onPress={() => router.push('/service/add')} style={{ flex: 1 }} />
+          <Button title="Log service" onPress={() => router.push('/service/log')} style={{ flex: 1 }} />
           <Button
             title="New reminder"
             variant="secondary"

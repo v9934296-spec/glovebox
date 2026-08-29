@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import type { DueState } from '@/lib/domain/due';
+import { serviceTypeIcon as catalogIcon } from '@/lib/domain/serviceTypes';
 import { palette, radius, spacing, typography } from '@/lib/theme';
 
 export function Screen({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
@@ -512,34 +513,7 @@ export function kindAccent(kind: 'maintenance' | 'repair' | 'admin'): string {
 }
 
 export function serviceTypeIcon(serviceType: string): React.ComponentProps<typeof Ionicons>['name'] {
-  switch (serviceType) {
-    case 'oil_change':
-      return 'water-outline';
-    case 'tire_rotation':
-    case 'tires':
-      return 'ellipse-outline';
-    case 'brakes':
-      return 'disc-outline';
-    case 'battery':
-    case 'spark_plugs':
-      return 'flash-outline';
-    case 'alignment':
-      return 'git-commit-outline';
-    case 'transmission':
-      return 'cog-outline';
-    case 'coolant':
-      return 'snow-outline';
-    case 'air_filter':
-      return 'filter-outline';
-    case 'registration':
-    case 'insurance':
-    case 'smog':
-      return 'document-text-outline';
-    case 'repair':
-      return 'hammer-outline';
-    default:
-      return 'construct-outline';
-  }
+  return catalogIcon(serviceType) as React.ComponentProps<typeof Ionicons>['name'];
 }
 
 export function IconCircle({

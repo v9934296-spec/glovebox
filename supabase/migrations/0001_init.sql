@@ -80,6 +80,7 @@ create policy "own reminders" on public.reminders
 
 -- Storage: one private bucket for vehicle photos and receipts.
 -- Files live under <user_id>/... so the owner-folder policies below apply.
+-- Prefix + ".." hardening for existing databases is 0003_storage_rls_prefix.sql.
 insert into storage.buckets (id, name, public)
 values ('glovebox-media', 'glovebox-media', false)
 on conflict (id) do nothing;

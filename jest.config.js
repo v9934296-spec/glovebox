@@ -6,5 +6,5 @@ module.exports = {
   transformIgnorePatterns: [
     'node_modules/(?!(?:\\.pnpm/)?((jest-)?react-native|@react-native(-community)?|jest-expo|expo(nent)?|@expo(nent)?/.*|react-navigation|@react-navigation/.*))',
   ],
-  testPathIgnorePatterns: ['/node_modules/', '/.expo/'],
+  testPathIgnorePatterns: ['/node_modules/', '/.expo/', '/files/', '/onflow-v1/'],
 };

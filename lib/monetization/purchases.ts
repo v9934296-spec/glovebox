@@ -27,6 +27,7 @@ const apiKey = resolvePurchasesApiKey();
  * the free tier and the paywall explains purchases aren't available.
  */
 export const isPurchasesConfigured = apiKey.length > 0;
+let purchasesSdkStarted = false;
 
 export type PurchasesStatus = 'loading' | 'ready' | 'unavailable';
 export type RemotePaywallResult = 'unlocked' | 'dismissed' | 'unavailable';
@@ -73,6 +74,8 @@ export const useEntitlements = create<PurchasesState>((set) => ({
       set({ status: 'unavailable', isPro: false });
       return;
     }
+    if (purchasesSdkStarted) return;
+    purchasesSdkStarted = true;
     try {
       Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.WARN);
       Purchases.configure({ apiKey });
@@ -89,6 +92,7 @@ export const useEntitlements = create<PurchasesState>((set) => ({
         packages: sortOfferingPackages(offerings.current?.availablePackages ?? []),
       });
     } catch {
+      purchasesSdkStarted = false;
       // Native module missing (Expo Go) or store unreachable; stay on free tier.
       set({ status: 'unavailable', isPro: false });
     }

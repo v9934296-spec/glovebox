@@ -17,7 +17,7 @@ import {
 import { useReminders, useServiceRecords, useVehicle } from '@/lib/db/hooks';
 import { completeReminder, deleteReminder } from '@/lib/db/reminderRepo';
 import { deleteServiceRecord } from '@/lib/db/serviceRepo';
-import { deleteVehicle, updateVehicleMileage, updateVehicleRecalls, updateVehicleVinDecode } from '@/lib/db/vehicleRepo';
+import { applyRecallCheck, deleteVehicle, updateVehicleMileage, updateVehicleVinDecode } from '@/lib/db/vehicleRepo';
 import { dueSummary, reminderDueState, todayIso } from '@/lib/domain/due';
 import { formatMoney, summarizeExpenses } from '@/lib/domain/expenses';
 import { healthScore } from '@/lib/domain/healthScore';
@@ -120,7 +120,11 @@ export default function VehicleDetailScreen() {
     setCheckingRecalls(true);
     try {
       const recalls = await checkRecalls(vehicle.make, vehicle.model, vehicle.year);
-      updateVehicleRecalls(vehicle.id, recalls);
+      applyRecallCheck(
+        { make: vehicle.make, model: vehicle.model, year: vehicle.year },
+        recalls,
+        vehicle.id,
+      );
     } catch (e) {
       Alert.alert('Recall check failed', e instanceof Error ? e.message : 'Try again later.');
     } finally {
@@ -297,7 +301,7 @@ export default function VehicleDetailScreen() {
           <View style={{ gap: BLOCK }}>
             <Button
               title="Log service"
-              onPress={() => router.push({ pathname: '/service/add', params: { vehicleId: vehicle.id } })}
+              onPress={() => router.push({ pathname: '/service/log', params: { vehicleId: vehicle.id } })}
             />
             {records.length === 0 ? (
               <EmptyState
