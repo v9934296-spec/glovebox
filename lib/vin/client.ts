@@ -9,6 +9,17 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 import { parseDecodedVin, parseRecalls } from '../domain/vin';
 import type { DecodedVin, Recall } from '../domain/types';
 import { getSupabase, isSupabaseConfigured } from '../supabase';
+import { recallCheckFailureKindFromStatus, type RecallCheckFailureKind } from './recallCheck';
+
+export class VinServiceError extends Error {
+  readonly kind: RecallCheckFailureKind;
+
+  constructor(kind: RecallCheckFailureKind, message?: string) {
+    super(message ?? kind);
+    this.name = 'VinServiceError';
+    this.kind = kind;
+  }
+}
 
 export type VinAvailability = { available: true } | { available: false; reason: string };
 
@@ -26,13 +37,17 @@ async function invokeVin(body: Record<string, unknown>): Promise<unknown> {
   const { data, error } = await getSupabase().functions.invoke('vin', { body });
   if (error) {
     if (error instanceof FunctionsHttpError) {
+      const status = error.context.status;
+      const kind = recallCheckFailureKindFromStatus(status);
       const detail = await error.context
         .json()
         .then((b: { error?: string }) => b.error)
         .catch(() => undefined);
-      throw new Error(detail ?? 'The vehicle data service is unavailable right now. Try again in a minute.');
+      console.error('[vin] edge function failure', status, detail ?? error.message);
+      throw new VinServiceError(kind, detail);
     }
-    throw new Error('Could not reach the vehicle data service. Check your connection and try again.');
+    console.error('[vin] network failure', error.message);
+    throw new VinServiceError('network');
   }
   return (data as { result?: unknown })?.result;
 }

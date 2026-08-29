@@ -27,7 +27,13 @@ import { canExportReport } from '@/lib/monetization/entitlements';
 import { useIsPro } from '@/lib/monetization/purchases';
 import { shareVehicleReport } from '@/lib/report/export';
 import { palette, radius, spacing, typography } from '@/lib/theme';
-import { checkRecalls, decodeVin, vinAvailability } from '@/lib/vin/client';
+import { VinServiceError, checkRecalls, decodeVin, vinAvailability } from '@/lib/vin/client';
+import {
+  preconditionForRecallCheck,
+  recallCheckFailureAlert,
+  recallCheckSuccessAlert,
+  recallCheckUnavailableAlert,
+} from '@/lib/vin/recallCheck';
 
 type Tab = 'overview' | 'maintenance' | 'expenses' | 'reminders';
 const BLOCK = 28;
@@ -112,11 +118,20 @@ export default function VehicleDetailScreen() {
 
   async function onCheckRecalls() {
     if (!vehicle || checkingRecalls) return;
-    const availability = vinAvailability();
-    if (!availability.available) {
-      Alert.alert('Recall check unavailable', availability.reason);
+
+    const precondition = preconditionForRecallCheck(vehicle.vin);
+    if (!precondition.ok) {
+      Alert.alert(precondition.title, precondition.message);
       return;
     }
+
+    const availability = vinAvailability();
+    if (!availability.available) {
+      const alert = recallCheckUnavailableAlert(availability.reason);
+      Alert.alert(alert.title, alert.message);
+      return;
+    }
+
     setCheckingRecalls(true);
     try {
       const recalls = await checkRecalls(vehicle.make, vehicle.model, vehicle.year);
@@ -125,8 +140,15 @@ export default function VehicleDetailScreen() {
         recalls,
         vehicle.id,
       );
+      const success = recallCheckSuccessAlert(recalls.length);
+      Alert.alert(success.title, success.message);
     } catch (e) {
-      Alert.alert('Recall check failed', e instanceof Error ? e.message : 'Try again later.');
+      const alert =
+        e instanceof VinServiceError
+          ? recallCheckFailureAlert(e.kind)
+          : recallCheckFailureAlert('unexpected');
+      console.error('[recalls] check failed', e);
+      Alert.alert(alert.title, alert.message);
     } finally {
       setCheckingRecalls(false);
     }
