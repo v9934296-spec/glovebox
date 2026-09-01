@@ -28,6 +28,7 @@ import { useIsPro } from '@/lib/monetization/purchases';
 import { shareVehicleReport } from '@/lib/report/export';
 import { palette, radius, spacing, typography } from '@/lib/theme';
 import { VinServiceError, checkRecalls, decodeVin, vinAvailability } from '@/lib/vin/client';
+import { vinDecodeFailureMessage } from '@/lib/vin/errors';
 import {
   preconditionForRecallCheck,
   recallCheckFailureAlert,
@@ -110,7 +111,12 @@ export default function VehicleDetailScreen() {
         Alert.alert('Could not decode', 'This VIN did not return recognizable vehicle data.');
       }
     } catch (e) {
-      Alert.alert('Decode failed', e instanceof Error ? e.message : 'Try again later.');
+      const message =
+        e instanceof VinServiceError
+          ? vinDecodeFailureMessage(e.kind)
+          : 'Something went wrong while decoding the VIN. Try again.';
+      console.error('[vin] decode failed', e);
+      Alert.alert('Decode failed', message);
     } finally {
       setDecoding(false);
     }
@@ -267,8 +273,8 @@ export default function VehicleDetailScreen() {
                     recallState === 'unknown'
                       ? 'Not checked yet'
                       : recallState === 'none'
-                        ? `No open recalls · ${vehicle.recallCheckedAt?.slice(0, 10) ?? today}`
-                        : `${vehicle.recalls.length} open`
+                        ? `No recalls found · ${vehicle.recallCheckedAt?.slice(0, 10) ?? today}`
+                        : `${vehicle.recalls.length} found`
                   }
                   last={recallState !== 'open'}
                 />
