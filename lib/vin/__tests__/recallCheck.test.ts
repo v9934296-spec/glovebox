@@ -1,9 +1,13 @@
 import {
   preconditionForRecallCheck,
   recallCheckFailureAlert,
-  recallCheckFailureKindFromStatus,
   recallCheckSuccessAlert,
 } from '../recallCheck';
+import {
+  vinDecodeFailureMessage,
+  vinServiceFailureKindFromStatus,
+  type VinServiceFailureKind,
+} from '../errors';
 
 const VALID_VIN = '1HGCM82633A004352';
 
@@ -38,40 +42,73 @@ describe('preconditionForRecallCheck', () => {
 });
 
 describe('recallCheckSuccessAlert', () => {
-  it('reports no recalls', () => {
+  it('reports no recalls without claiming a VIN-specific open status', () => {
     expect(recallCheckSuccessAlert(0)).toEqual({
-      title: 'No open recalls found',
-      message: 'No open recalls were found for this vehicle.',
+      title: 'No recalls found',
+      message: 'No recalls were found for this year, make, and model.',
     });
   });
 
   it('reports one recall', () => {
     expect(recallCheckSuccessAlert(1)).toEqual({
       title: 'Recall found',
-      message: '1 open recall found for this vehicle.',
+      message: '1 recall found for this year, make, and model.',
     });
   });
 
   it('reports multiple recalls', () => {
     expect(recallCheckSuccessAlert(3)).toEqual({
       title: 'Recall found',
-      message: '3 open recalls found for this vehicle.',
+      message: '3 recalls found for this year, make, and model.',
     });
   });
 });
 
 describe('recallCheckFailureAlert', () => {
-  it('maps network failures', () => {
-    expect(recallCheckFailureAlert('network').title).toBe('Unable to connect');
+  const cases: Array<[VinServiceFailureKind, string]> = [
+    ['invalid_request', 'Vehicle information incomplete'],
+    ['auth', 'Recall check unavailable'],
+    ['rate_limit', 'Too many requests'],
+    ['server', 'Recall service unavailable'],
+    ['network', 'Unable to connect'],
+    ['unexpected', 'Recall check failed'],
+  ];
+
+  it.each(cases)('maps %s failures to the correct alert', (kind, title) => {
+    expect(recallCheckFailureAlert(kind).title).toBe(title);
   });
 });
 
-describe('recallCheckFailureKindFromStatus', () => {
-  it('maps common HTTP statuses', () => {
-    expect(recallCheckFailureKindFromStatus(400)).toBe('invalid_vin_server');
-    expect(recallCheckFailureKindFromStatus(401)).toBe('auth');
-    expect(recallCheckFailureKindFromStatus(429)).toBe('rate_limit');
-    expect(recallCheckFailureKindFromStatus(502)).toBe('server');
-    expect(recallCheckFailureKindFromStatus(418)).toBe('unexpected');
+describe('vinServiceFailureKindFromStatus', () => {
+  it.each([
+    [400, 'invalid_request'],
+    [422, 'invalid_request'],
+    [401, 'auth'],
+    [403, 'auth'],
+    [429, 'rate_limit'],
+    [500, 'server'],
+    [502, 'server'],
+    [418, 'unexpected'],
+  ] as const)('maps status %i to %s', (status, kind) => {
+    expect(vinServiceFailureKindFromStatus(status)).toBe(kind);
+  });
+});
+
+describe('vinDecodeFailureMessage', () => {
+  it('never exposes internal failure-kind strings to users', () => {
+    const kinds: VinServiceFailureKind[] = [
+      'invalid_request',
+      'auth',
+      'rate_limit',
+      'server',
+      'network',
+      'unexpected',
+    ];
+
+    for (const kind of kinds) {
+      const message = vinDecodeFailureMessage(kind);
+      expect(message.length).toBeGreaterThan(20);
+      expect(message).not.toBe(kind);
+    }
   });
 });
