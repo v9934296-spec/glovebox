@@ -9,17 +9,10 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 import { parseDecodedVin, parseRecalls } from '../domain/vin';
 import type { DecodedVin, Recall } from '../domain/types';
 import { getSupabase, isSupabaseConfigured } from '../supabase';
-import { recallCheckFailureKindFromStatus, type RecallCheckFailureKind } from './recallCheck';
+import { VinServiceError, vinServiceFailureKindFromStatus } from './errors';
 
-export class VinServiceError extends Error {
-  readonly kind: RecallCheckFailureKind;
-
-  constructor(kind: RecallCheckFailureKind, message?: string) {
-    super(message ?? kind);
-    this.name = 'VinServiceError';
-    this.kind = kind;
-  }
-}
+export { VinServiceError } from './errors';
+export type { VinServiceFailureKind } from './errors';
 
 export type VinAvailability = { available: true } | { available: false; reason: string };
 
@@ -38,7 +31,7 @@ async function invokeVin(body: Record<string, unknown>): Promise<unknown> {
   if (error) {
     if (error instanceof FunctionsHttpError) {
       const status = error.context.status;
-      const kind = recallCheckFailureKindFromStatus(status);
+      const kind = vinServiceFailureKindFromStatus(status);
       const detail = await error.context
         .json()
         .then((b: { error?: string }) => b.error)
