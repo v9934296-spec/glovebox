@@ -3,18 +3,11 @@
  * Network calls live in client.ts; these stay pure for unit tests.
  */
 import { isValidVinFormat, normalizeVin } from '../domain/vin';
+import type { VinServiceFailureKind } from './errors';
 
 export type RecallCheckPrecondition =
   | { ok: true; vin: string }
   | { ok: false; title: string; message: string };
-
-export type RecallCheckFailureKind =
-  | 'invalid_vin_server'
-  | 'auth'
-  | 'rate_limit'
-  | 'server'
-  | 'unexpected'
-  | 'network';
 
 export type RecallCheckAlert = { title: string; message: string };
 
@@ -48,22 +41,22 @@ export function recallCheckUnavailableAlert(reason: string): RecallCheckAlert {
 export function recallCheckSuccessAlert(recallCount: number): RecallCheckAlert {
   if (recallCount === 0) {
     return {
-      title: 'No open recalls found',
-      message: 'No open recalls were found for this vehicle.',
+      title: 'No recalls found',
+      message: 'No recalls were found for this year, make, and model.',
     };
   }
   return {
     title: 'Recall found',
-    message: `${recallCount} open recall${recallCount === 1 ? '' : 's'} found for this vehicle.`,
+    message: `${recallCount} recall${recallCount === 1 ? '' : 's'} found for this year, make, and model.`,
   };
 }
 
-export function recallCheckFailureAlert(kind: RecallCheckFailureKind): RecallCheckAlert {
+export function recallCheckFailureAlert(kind: VinServiceFailureKind): RecallCheckAlert {
   switch (kind) {
-    case 'invalid_vin_server':
+    case 'invalid_request':
       return {
-        title: 'Invalid VIN',
-        message: 'The recall service could not recognize this VIN. Check it and try again.',
+        title: 'Vehicle information incomplete',
+        message: 'Check the vehicle year, make, and model, then try again.',
       };
     case 'auth':
       return {
@@ -91,13 +84,4 @@ export function recallCheckFailureAlert(kind: RecallCheckFailureKind): RecallChe
         message: 'Something went wrong while checking recalls. Try again.',
       };
   }
-}
-
-/** Maps an HTTP status from the vin Edge Function to a failure kind. */
-export function recallCheckFailureKindFromStatus(status: number): RecallCheckFailureKind {
-  if (status === 400 || status === 422) return 'invalid_vin_server';
-  if (status === 401 || status === 403) return 'auth';
-  if (status === 429) return 'rate_limit';
-  if (status >= 500) return 'server';
-  return 'unexpected';
 }
