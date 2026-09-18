@@ -72,4 +72,14 @@ describe('shared UI refinements', () => {
     expect(pressedStyle.opacity).toBe(0.5);
     expect(pressedStyle.transform).toBeUndefined();
   });
+
+  it('keeps danger buttons transparent while still using the shared pressed treatment', () => {
+    const { UNSAFE_getByProps } = render(<Button title="Delete" onPress={() => {}} variant="danger" />);
+    const pressable = UNSAFE_getByProps({ accessibilityRole: 'button' });
+    const pressedStyle = StyleSheet.flatten(pressable?.props.style({ pressed: true }));
+
+    expect(pressedStyle.backgroundColor).toBe('transparent');
+    expect(pressedStyle.opacity).toBe(0.92);
+    expect(pressedStyle.transform).toEqual([{ scale: 0.99 }]);
+  });
 });

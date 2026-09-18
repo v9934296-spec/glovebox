@@ -514,7 +514,7 @@ export function Chip({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityState={{ selected }}
+      accessibilityState={selected ? { selected: true } : undefined}
       style={[styles.chip, selected && styles.chipSelected]}
     >
       <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
