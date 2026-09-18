@@ -1,7 +1,8 @@
 import React from 'react';
 import { render } from '@testing-library/react-native';
-import { Animated } from 'react-native';
-import { DueBadge, Field, HealthRing } from '../ui';
+import { Animated, StyleSheet } from 'react-native';
+import { Button, Chip, DueBadge, Field, HealthRing } from '../ui';
+import { palette } from '../../lib/theme';
 
 jest.mock('@expo/vector-icons', () => {
   const React = require('react');
@@ -52,5 +53,23 @@ describe('shared UI refinements', () => {
   it('keeps due-state labels visible', () => {
     const { getByText } = render(<DueBadge state="due_soon" />);
     expect(getByText('Due soon')).toBeTruthy();
+  });
+
+  it('exposes chip selection through accessibility state', () => {
+    const { UNSAFE_getByProps } = render(<Chip label="Truck" selected onPress={() => {}} />);
+    expect(UNSAFE_getByProps({ accessibilityRole: 'button' }).props.accessibilityState).toEqual({
+      selected: true,
+    });
+  });
+
+  it('keeps loading buttons visually inactive even if pressed', () => {
+    const { UNSAFE_getByProps } = render(<Button title="Save" onPress={() => {}} loading />);
+    const pressable = UNSAFE_getByProps({ accessibilityRole: 'button' });
+    const pressedStyle = StyleSheet.flatten(pressable.props.style({ pressed: true }));
+
+    expect(pressable.props.disabled).toBe(true);
+    expect(pressedStyle.backgroundColor).toBe(palette.accent.primary);
+    expect(pressedStyle.opacity).toBe(0.5);
+    expect(pressedStyle.transform).toBeUndefined();
   });
 });

@@ -94,7 +94,9 @@ export function Button({
       style={({ pressed }) => [
         styles.button,
         pressed && !isDisabled && styles.buttonPressed,
-        variant === 'primary' && { backgroundColor: pressed ? palette.accent.primaryPressed : palette.accent.primary },
+        variant === 'primary' && {
+          backgroundColor: pressed && !isDisabled ? palette.accent.primaryPressed : palette.accent.primary,
+        },
         variant === 'secondary' && styles.buttonSecondary,
         variant === 'ghost' && styles.buttonGhost,
         variant === 'danger' && styles.buttonDanger,
