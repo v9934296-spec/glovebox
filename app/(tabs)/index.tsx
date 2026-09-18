@@ -132,17 +132,19 @@ export default function DashboardScreen() {
             actionLabel={vehicles.length > 3 ? 'See garage' : undefined}
             onAction={vehicles.length > 3 ? () => router.push('/garage') : undefined}
           />
-          <Card style={styles.sectionCard}>
-            {garagePreview.map(({ vehicle, score }, i) => (
-              <CompactGarageRow
-                key={vehicle.id}
-                vehicle={vehicle}
-                score={score}
-                showSeparator={i < garagePreview.length - 1}
-                onPress={() => router.push({ pathname: '/vehicle/[id]', params: { id: vehicle.id } })}
-              />
-            ))}
-          </Card>
+          {garagePreview.length > 0 && (
+            <Card style={styles.sectionCard}>
+              {garagePreview.map(({ vehicle, score }, i) => (
+                <CompactGarageRow
+                  key={vehicle.id}
+                  vehicle={vehicle}
+                  score={score}
+                  showSeparator={i < garagePreview.length - 1}
+                  onPress={() => router.push({ pathname: '/vehicle/[id]', params: { id: vehicle.id } })}
+                />
+              ))}
+            </Card>
+          )}
         </View>
 
         {recentRecords.length > 0 && (
