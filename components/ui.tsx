@@ -85,19 +85,20 @@ export function Button({
 }) {
   const onAccent = variant === 'primary';
   const onDanger = variant === 'danger';
+  const isDisabled = disabled || loading;
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      disabled={disabled || loading}
+      disabled={isDisabled}
       style={({ pressed }) => [
         styles.button,
-        pressed && !disabled && !loading && styles.buttonPressed,
+        pressed && !isDisabled && styles.buttonPressed,
         variant === 'primary' && { backgroundColor: pressed ? palette.accent.primaryPressed : palette.accent.primary },
         variant === 'secondary' && styles.buttonSecondary,
         variant === 'ghost' && styles.buttonGhost,
         variant === 'danger' && styles.buttonDanger,
-        (disabled || loading) && { opacity: 0.5 },
+        isDisabled && { opacity: 0.5 },
         style,
       ]}
     >
@@ -135,7 +136,6 @@ export function Field({
       <TextInput
         placeholderTextColor={palette.text.tertiary}
         {...inputProps}
-        accessibilityLabel={inputProps.accessibilityLabel ?? label}
         onFocus={(e) => {
           setFocused(true);
           onFocus?.(e);

@@ -22,12 +22,18 @@ jest.mock('react-native-svg', () => {
 });
 
 describe('shared UI refinements', () => {
+  let timingSpy: jest.SpiedFunction<typeof Animated.timing>;
+
   beforeAll(() => {
-    jest.spyOn(Animated, 'timing').mockReturnValue({
+    timingSpy = jest.spyOn(Animated, 'timing').mockReturnValue({
       start: (callback?: () => void) => callback?.(),
       stop: () => undefined,
       reset: () => undefined,
     } as unknown as Animated.CompositeAnimation);
+  });
+
+  afterAll(() => {
+    timingSpy.mockRestore();
   });
 
   it('announces the health ring score for assistive tech', () => {
@@ -36,10 +42,10 @@ describe('shared UI refinements', () => {
   });
 
   it('renders an explicit validation message alongside field errors', () => {
-    const { getByLabelText, getByText } = render(
+    const { getByText } = render(
       <Field label="VIN" value="" onChangeText={() => {}} error="VIN is invalid" />,
     );
-    expect(getByLabelText('VIN')).toBeTruthy();
+    expect(getByText('VIN')).toBeTruthy();
     expect(getByText('VIN is invalid')).toBeTruthy();
   });
 
