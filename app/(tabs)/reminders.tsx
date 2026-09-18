@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import React, { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, EmptyState, ReminderListRow, Screen, SectionLabel } from '@/components/ui';
+import { Button, Card, EmptyState, ReminderListRow, Screen, SectionLabel } from '@/components/ui';
 import { useReminders, useVehicles } from '@/lib/db/hooks';
 import { completeReminder } from '@/lib/db/reminderRepo';
 import { dueSummary, reminderDueState, todayIso, type DueState } from '@/lib/domain/due';
@@ -9,8 +9,6 @@ import type { Reminder, Vehicle } from '@/lib/domain/types';
 import { palette, spacing, typography } from '@/lib/theme';
 
 type Entry = { reminder: Reminder; vehicle: Vehicle; state: DueState };
-
-const BLOCK = 28;
 
 export default function RemindersScreen() {
   const router = useRouter();
@@ -61,7 +59,7 @@ export default function RemindersScreen() {
         contentContainerStyle={{
           padding: spacing.screenPadding,
           paddingBottom: spacing['2xl'],
-          gap: BLOCK,
+          gap: spacing.section,
         }}
       >
         <Button title="New reminder" onPress={() => router.push('/reminder/add')} />
@@ -86,15 +84,17 @@ export default function RemindersScreen() {
             {completed.length > 0 && (
               <View>
                 <SectionLabel title="Completed" />
-                {completed.map((r, i) => (
-                  <ReminderListRow
-                    key={r.id}
-                    title={r.title}
-                    meta={`completed ${r.completedAt?.slice(0, 10) ?? ''}`}
-                    completed
-                    showSeparator={i < completed.length - 1}
-                  />
-                ))}
+                <Card style={styles.groupCard}>
+                  {completed.map((r, i) => (
+                    <ReminderListRow
+                      key={r.id}
+                      title={r.title}
+                      meta={`completed ${r.completedAt?.slice(0, 10) ?? ''}`}
+                      completed
+                      showSeparator={i < completed.length - 1}
+                    />
+                  ))}
+                </Card>
               </View>
             )}
           </>
@@ -110,27 +110,33 @@ function ReminderGroup({ title, entries }: { title: string; entries: Entry[] }) 
   return (
     <View>
       <SectionLabel title={title} />
-      {entries.map((e, i) => (
-        <ReminderListRow
-          key={e.reminder.id}
-          title={e.reminder.title}
-          meta={`${e.vehicle.nickname} · ${dueSummary({
-            dueDate: e.reminder.dueDate,
-            dueMileage: e.reminder.dueMileage,
-            currentMileage: e.vehicle.mileage,
-            today,
-          })}${e.reminder.recurrenceType !== 'none' ? ' · recurring' : ''}`}
-          state={e.state}
-          showSeparator={i < entries.length - 1}
-          onPress={() => router.push({ pathname: '/vehicle/[id]', params: { id: e.vehicle.id } })}
-          onDone={() => completeReminder(e.reminder, e.vehicle.mileage)}
-        />
-      ))}
+      <Card style={styles.groupCard}>
+        {entries.map((e, i) => (
+          <ReminderListRow
+            key={e.reminder.id}
+            title={e.reminder.title}
+            meta={`${e.vehicle.nickname} · ${dueSummary({
+              dueDate: e.reminder.dueDate,
+              dueMileage: e.reminder.dueMileage,
+              currentMileage: e.vehicle.mileage,
+              today,
+            })}${e.reminder.recurrenceType !== 'none' ? ' · recurring' : ''}`}
+            state={e.state}
+            showSeparator={i < entries.length - 1}
+            onPress={() => router.push({ pathname: '/vehicle/[id]', params: { id: e.vehicle.id } })}
+            onDone={() => completeReminder(e.reminder, e.vehicle.mileage)}
+          />
+        ))}
+      </Card>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  groupCard: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+  },
   textLink: {
     color: palette.accent.primary,
     fontSize: typography.bodyEmphasis.size,

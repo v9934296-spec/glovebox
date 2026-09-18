@@ -24,8 +24,6 @@ import { serviceTypeDef, serviceTypeLabel } from '@/lib/domain/serviceTypes';
 import type { Vehicle } from '@/lib/domain/types';
 import { palette, radius, spacing, typography } from '@/lib/theme';
 
-const BLOCK_GAP = 28;
-
 function formatMileageShort(miles: number): string {
   if (miles >= 1000) return `${Math.round(miles / 1000)}k mi`;
   return `${miles.toLocaleString()} mi`;
@@ -84,7 +82,7 @@ export default function DashboardScreen() {
         contentContainerStyle={{
           padding: spacing.screenPadding,
           paddingBottom: spacing['2xl'],
-          gap: BLOCK_GAP,
+          gap: spacing.section,
         }}
       >
         <MetricStrip
@@ -101,12 +99,14 @@ export default function DashboardScreen() {
             onAction={() => router.push('/reminders')}
           />
           {attention.length === 0 ? (
-            <View style={styles.clearRow}>
-              <Ionicons name="checkmark-circle" size={18} color={palette.status.ok} />
-              <Text style={styles.clearText}>You're clear — nothing overdue or due soon</Text>
-            </View>
+            <Card style={styles.sectionCard}>
+              <View style={styles.clearRow}>
+                <Ionicons name="checkmark-circle" size={18} color={palette.status.ok} />
+                <Text style={styles.clearText}>You're clear — nothing overdue or due soon</Text>
+              </View>
+            </Card>
           ) : (
-            <View>
+            <Card style={styles.sectionCard}>
               {attention.map(({ reminder, vehicle, state }, i) => (
                 <AttentionRow
                   key={reminder.id}
@@ -122,7 +122,7 @@ export default function DashboardScreen() {
                   onPress={() => router.push({ pathname: '/vehicle/[id]', params: { id: vehicle.id } })}
                 />
               ))}
-            </View>
+            </Card>
           )}
         </View>
 
@@ -132,15 +132,17 @@ export default function DashboardScreen() {
             actionLabel={vehicles.length > 3 ? 'See garage' : undefined}
             onAction={vehicles.length > 3 ? () => router.push('/garage') : undefined}
           />
-          {garagePreview.map(({ vehicle, score }, i) => (
-            <CompactGarageRow
-              key={vehicle.id}
-              vehicle={vehicle}
-              score={score}
-              showSeparator={i < garagePreview.length - 1}
-              onPress={() => router.push({ pathname: '/vehicle/[id]', params: { id: vehicle.id } })}
-            />
-          ))}
+          <Card style={styles.sectionCard}>
+            {garagePreview.map(({ vehicle, score }, i) => (
+              <CompactGarageRow
+                key={vehicle.id}
+                vehicle={vehicle}
+                score={score}
+                showSeparator={i < garagePreview.length - 1}
+                onPress={() => router.push({ pathname: '/vehicle/[id]', params: { id: vehicle.id } })}
+              />
+            ))}
+          </Card>
         </View>
 
         {recentRecords.length > 0 && (
@@ -275,6 +277,10 @@ const styles = StyleSheet.create({
   rowDivider: {
     borderBottomWidth: 1,
     borderBottomColor: palette.border.subtle,
+  },
+  sectionCard: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
   },
   quickActions: { flexDirection: 'row', gap: spacing.md },
 });
