@@ -14,8 +14,6 @@ import { isSupabaseConfigured } from '@/lib/supabase';
 import { syncNow, useSyncStatus } from '@/lib/sync/engine';
 import { palette, spacing, typography } from '@/lib/theme';
 
-const BLOCK = 28;
-
 export default function SettingsScreen() {
   const router = useRouter();
   const vehicles = useVehicles();
@@ -99,7 +97,7 @@ export default function SettingsScreen() {
         contentContainerStyle={{
           padding: spacing.screenPadding,
           paddingBottom: spacing['2xl'],
-          gap: BLOCK,
+          gap: spacing.section,
         }}
       >
         <View>

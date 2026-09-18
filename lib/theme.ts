@@ -41,11 +41,13 @@ export const spacing = {
   lg: 16,
   xl: 24,
   '2xl': 32,
+  section: 28,
   screenPadding: 16,
 } as const;
 
 export const radius = {
   sm: 6,
+  label: 8,
   md: 10,
   lg: 14,
   xl: 16,

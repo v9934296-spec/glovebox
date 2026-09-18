@@ -37,7 +37,7 @@ import {
 } from '@/lib/vin/recallCheck';
 
 type Tab = 'overview' | 'maintenance' | 'expenses' | 'reminders';
-const BLOCK = 28;
+const BLOCK = spacing.section;
 
 export default function VehicleDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -338,7 +338,7 @@ export default function VehicleDetailScreen() {
                 icon="construct-outline"
               />
             ) : (
-              <View>
+              <Card style={styles.listCard}>
                 {records.map((r, i) => (
                   <View key={r.id} style={[styles.serviceRow, i < records.length - 1 && styles.serviceRowSep]}>
                     <View style={styles.serviceRowTop}>
@@ -397,7 +397,7 @@ export default function VehicleDetailScreen() {
                     </View>
                   </View>
                 ))}
-              </View>
+              </Card>
             )}
           </View>
         )}
@@ -454,7 +454,7 @@ export default function VehicleDetailScreen() {
                 icon="notifications-outline"
               />
             ) : (
-              <View>
+              <Card style={styles.listCard}>
                 {reminders.map((r, i) => {
                   const state = reminderDueState(r, vehicle.mileage, today);
                   return (
@@ -479,7 +479,7 @@ export default function VehicleDetailScreen() {
                     />
                   );
                 })}
-              </View>
+              </Card>
             )}
           </View>
         )}
@@ -541,6 +541,10 @@ const styles = StyleSheet.create({
   },
   recordNotes: { color: palette.text.secondary, fontSize: typography.caption.size, marginTop: spacing.xs },
   rowActions: { flexDirection: 'row', gap: spacing.md },
+  listCard: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+  },
   serviceRow: { paddingVertical: spacing.md },
   serviceRowSep: { borderBottomWidth: 1, borderBottomColor: palette.border.subtle },
   serviceRowTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },

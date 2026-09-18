@@ -3,7 +3,7 @@ import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, EmptyState, Field, PhotoTile, Screen, SectionLabel } from '@/components/ui';
+import { Button, Card, EmptyState, Field, PhotoTile, Screen, SectionLabel } from '@/components/ui';
 import { useVehicles } from '@/lib/db/hooks';
 import { createVehicle } from '@/lib/db/vehicleRepo';
 import { validateVin } from '@/lib/domain/vin';
@@ -111,190 +111,196 @@ export default function AddVehicleScreen() {
 
         <View>
           <SectionLabel title="Vehicle" />
-          <Controller
-            control={control}
-            name="nickname"
-            rules={{ required: 'Give your vehicle a name' }}
-            render={({ field, fieldState }) => (
-              <Field
-                label="Nickname"
-                placeholder="e.g. Daily driver"
-                value={field.value}
-                onChangeText={field.onChange}
-                error={fieldState.error?.message}
-                containerStyle={fieldGap}
-              />
-            )}
-          />
-          <View style={styles.twoCol}>
-            <View style={{ flex: 1 }}>
-              <Controller
-                control={control}
-                name="make"
-                rules={{ required: 'Required' }}
-                render={({ field, fieldState }) => (
-                  <Field
-                    label="Make"
-                    placeholder="Honda"
-                    value={field.value}
-                    onChangeText={field.onChange}
-                    error={fieldState.error?.message}
-                    containerStyle={fieldGap}
-                  />
-                )}
-              />
+          <Card>
+            <Controller
+              control={control}
+              name="nickname"
+              rules={{ required: 'Give your vehicle a name' }}
+              render={({ field, fieldState }) => (
+                <Field
+                  label="Nickname"
+                  placeholder="e.g. Daily driver"
+                  value={field.value}
+                  onChangeText={field.onChange}
+                  error={fieldState.error?.message}
+                  containerStyle={fieldGap}
+                />
+              )}
+            />
+            <View style={styles.twoCol}>
+              <View style={{ flex: 1 }}>
+                <Controller
+                  control={control}
+                  name="make"
+                  rules={{ required: 'Required' }}
+                  render={({ field, fieldState }) => (
+                    <Field
+                      label="Make"
+                      placeholder="Honda"
+                      value={field.value}
+                      onChangeText={field.onChange}
+                      error={fieldState.error?.message}
+                      containerStyle={fieldGap}
+                    />
+                  )}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Controller
+                  control={control}
+                  name="model"
+                  rules={{ required: 'Required' }}
+                  render={({ field, fieldState }) => (
+                    <Field
+                      label="Model"
+                      placeholder="Civic"
+                      value={field.value}
+                      onChangeText={field.onChange}
+                      error={fieldState.error?.message}
+                      containerStyle={fieldGap}
+                    />
+                  )}
+                />
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <Controller
-                control={control}
-                name="model"
-                rules={{ required: 'Required' }}
-                render={({ field, fieldState }) => (
-                  <Field
-                    label="Model"
-                    placeholder="Civic"
-                    value={field.value}
-                    onChangeText={field.onChange}
-                    error={fieldState.error?.message}
-                    containerStyle={fieldGap}
-                  />
-                )}
-              />
+            <View style={styles.twoCol}>
+              <View style={{ flex: 1 }}>
+                <Controller
+                  control={control}
+                  name="year"
+                  rules={{
+                    required: 'Required',
+                    validate: (v) => {
+                      const n = Number(v);
+                      return (n >= 1900 && n <= CURRENT_YEAR + 1) || 'Invalid year';
+                    },
+                  }}
+                  render={({ field, fieldState }) => (
+                    <Field
+                      label="Year"
+                      placeholder="2015"
+                      keyboardType="number-pad"
+                      value={field.value}
+                      onChangeText={field.onChange}
+                      error={fieldState.error?.message}
+                      containerStyle={fieldGap}
+                    />
+                  )}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Controller
+                  control={control}
+                  name="trim"
+                  render={({ field }) => (
+                    <Field
+                      label="Trim"
+                      placeholder="EX-L"
+                      value={field.value}
+                      onChangeText={field.onChange}
+                      containerStyle={fieldGap}
+                    />
+                  )}
+                />
+              </View>
             </View>
-          </View>
-          <View style={styles.twoCol}>
-            <View style={{ flex: 1 }}>
-              <Controller
-                control={control}
-                name="year"
-                rules={{
-                  required: 'Required',
-                  validate: (v) => {
-                    const n = Number(v);
-                    return (n >= 1900 && n <= CURRENT_YEAR + 1) || 'Invalid year';
-                  },
-                }}
-                render={({ field, fieldState }) => (
-                  <Field
-                    label="Year"
-                    placeholder="2015"
-                    keyboardType="number-pad"
-                    value={field.value}
-                    onChangeText={field.onChange}
-                    error={fieldState.error?.message}
-                    containerStyle={fieldGap}
-                  />
-                )}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Controller
-                control={control}
-                name="trim"
-                render={({ field }) => (
-                  <Field
-                    label="Trim"
-                    placeholder="EX-L"
-                    value={field.value}
-                    onChangeText={field.onChange}
-                    containerStyle={fieldGap}
-                  />
-                )}
-              />
-            </View>
-          </View>
-          <Controller
-            control={control}
-            name="mileage"
-            rules={{ required: 'Current mileage is required' }}
-            render={({ field, fieldState }) => (
-              <Field
-                label="Mileage"
-                placeholder="82000"
-                keyboardType="number-pad"
-                value={field.value}
-                onChangeText={field.onChange}
-                error={fieldState.error?.message}
-                containerStyle={fieldLast}
-              />
-            )}
-          />
+            <Controller
+              control={control}
+              name="mileage"
+              rules={{ required: 'Current mileage is required' }}
+              render={({ field, fieldState }) => (
+                <Field
+                  label="Mileage"
+                  placeholder="82000"
+                  keyboardType="number-pad"
+                  value={field.value}
+                  onChangeText={field.onChange}
+                  error={fieldState.error?.message}
+                  containerStyle={fieldLast}
+                />
+              )}
+            />
+          </Card>
         </View>
 
         <View>
           <SectionLabel title="Identifiers" />
-          <Controller
-            control={control}
-            name="licensePlate"
-            render={({ field }) => (
-              <Field
-                label="License plate"
-                placeholder="7ABC123"
-                autoCapitalize="characters"
-                value={field.value}
-                onChangeText={field.onChange}
-                containerStyle={fieldGap}
-              />
-            )}
-          />
-          <Controller
-            control={control}
-            name="vin"
-            rules={{
-              validate: (v) => {
-                if (!v.trim()) return true;
-                const check = validateVin(v);
-                return check.valid || check.reason;
-              },
-            }}
-            render={({ field, fieldState }) => (
-              <Field
-                label="VIN"
-                placeholder="17 characters"
-                autoCapitalize="characters"
-                value={field.value}
-                onChangeText={field.onChange}
-                error={fieldState.error?.message}
-                containerStyle={fieldLast}
-              />
-            )}
-          />
-          <Text style={styles.vinHint}>We'll decode make/model when possible</Text>
+          <Card>
+            <Controller
+              control={control}
+              name="licensePlate"
+              render={({ field }) => (
+                <Field
+                  label="License plate"
+                  placeholder="7ABC123"
+                  autoCapitalize="characters"
+                  value={field.value}
+                  onChangeText={field.onChange}
+                  containerStyle={fieldGap}
+                />
+              )}
+            />
+            <Controller
+              control={control}
+              name="vin"
+              rules={{
+                validate: (v) => {
+                  if (!v.trim()) return true;
+                  const check = validateVin(v);
+                  return check.valid || check.reason;
+                },
+              }}
+              render={({ field, fieldState }) => (
+                <Field
+                  label="VIN"
+                  placeholder="17 characters"
+                  autoCapitalize="characters"
+                  value={field.value}
+                  onChangeText={field.onChange}
+                  error={fieldState.error?.message}
+                  containerStyle={fieldLast}
+                />
+              )}
+            />
+            <Text style={styles.vinHint}>We'll decode make/model when possible</Text>
+          </Card>
         </View>
 
         <View>
           <SectionLabel title="Optional" />
-          <Controller
-            control={control}
-            name="purchaseDate"
-            rules={{
-              validate: (v) => !v || /^\d{4}-\d{2}-\d{2}$/.test(v) || 'Use YYYY-MM-DD',
-            }}
-            render={({ field, fieldState }) => (
-              <Field
-                label="Purchase date"
-                placeholder="YYYY-MM-DD"
-                value={field.value}
-                onChangeText={field.onChange}
-                error={fieldState.error?.message}
-                containerStyle={fieldGap}
-              />
-            )}
-          />
-          <Controller
-            control={control}
-            name="purchasePrice"
-            render={({ field }) => (
-              <Field
-                label="Purchase price"
-                placeholder="12500"
-                keyboardType="decimal-pad"
-                value={field.value}
-                onChangeText={field.onChange}
-                containerStyle={fieldLast}
-              />
-            )}
-          />
+          <Card>
+            <Controller
+              control={control}
+              name="purchaseDate"
+              rules={{
+                validate: (v) => !v || /^\d{4}-\d{2}-\d{2}$/.test(v) || 'Use YYYY-MM-DD',
+              }}
+              render={({ field, fieldState }) => (
+                <Field
+                  label="Purchase date"
+                  placeholder="YYYY-MM-DD"
+                  value={field.value}
+                  onChangeText={field.onChange}
+                  error={fieldState.error?.message}
+                  containerStyle={fieldGap}
+                />
+              )}
+            />
+            <Controller
+              control={control}
+              name="purchasePrice"
+              render={({ field }) => (
+                <Field
+                  label="Purchase price"
+                  placeholder="12500"
+                  keyboardType="decimal-pad"
+                  value={field.value}
+                  onChangeText={field.onChange}
+                  containerStyle={fieldLast}
+                />
+              )}
+            />
+          </Card>
         </View>
 
         <Button title="Save vehicle" onPress={onSubmit} />

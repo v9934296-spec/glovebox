@@ -182,10 +182,18 @@ const styles = StyleSheet.create({
   },
   receiptText: { flex: 1, color: palette.text.primary, fontSize: typography.body.size },
   proPill: {
-    borderRadius: radius.pill,
+    borderRadius: radius.label,
+    borderWidth: 1,
+    borderColor: palette.accent.primary,
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
-    backgroundColor: palette.accent.primary,
+    backgroundColor: palette.accent.soft,
   },
-  proPillText: { color: palette.text.onAccent, fontSize: 11, fontWeight: '700' },
+  proPillText: {
+    color: palette.accent.primary,
+    fontSize: typography.overline.size,
+    fontWeight: typography.overline.weight,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
 });

@@ -85,18 +85,22 @@ export function Button({
 }) {
   const onAccent = variant === 'primary';
   const onDanger = variant === 'danger';
+  const isDisabled = disabled || loading;
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      disabled={disabled || loading}
+      disabled={isDisabled}
       style={({ pressed }) => [
         styles.button,
-        variant === 'primary' && { backgroundColor: pressed ? palette.accent.primaryPressed : palette.accent.primary },
+        pressed && !isDisabled && styles.buttonPressed,
+        variant === 'primary' && {
+          backgroundColor: pressed && !isDisabled ? palette.accent.primaryPressed : palette.accent.primary,
+        },
         variant === 'secondary' && styles.buttonSecondary,
         variant === 'ghost' && styles.buttonGhost,
-        variant === 'danger' && [styles.buttonDanger, pressed && { opacity: 0.85 }],
-        (disabled || loading) && { opacity: 0.5 },
+        variant === 'danger' && styles.buttonDanger,
+        isDisabled && { opacity: 0.5 },
         style,
       ]}
     >
@@ -149,7 +153,12 @@ export function Field({
           inputProps.style,
         ]}
       />
-      {error != null && <Text style={styles.fieldError}>{error}</Text>}
+      {error != null && (
+        <View style={styles.fieldErrorRow}>
+          <Ionicons name="alert-circle" size={14} color={palette.status.overdue} />
+          <Text style={styles.fieldError}>{error}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -374,7 +383,12 @@ export function HealthRing({ score, size = 44 }: { score: number; size?: number 
   }, [clamped, circumference, progress]);
 
   return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+    <View
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel={`Vehicle health ${Math.round(clamped)} out of 100`}
+      style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}
+    >
       <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
         <Circle
           cx={size / 2}
@@ -499,6 +513,8 @@ export function Chip({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={selected ? { selected: true } : undefined}
       style={[styles.chip, selected && styles.chipSelected]}
     >
       <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
@@ -741,7 +757,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   sectionLabelTitle: {
     color: palette.text.primary,
@@ -755,11 +771,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   button: {
-    borderRadius: radius.md,
+    borderRadius: radius.label,
     paddingVertical: 14,
     paddingHorizontal: spacing.lg,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  buttonPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.99 }],
   },
   buttonSecondary: {
     backgroundColor: palette.bg.surfaceRaised,
@@ -834,10 +854,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   fieldLabel: {
-    color: palette.text.secondary,
-    fontSize: typography.caption.size,
+    color: palette.text.tertiary,
+    fontSize: typography.overline.size,
+    fontWeight: typography.overline.weight,
+    letterSpacing: typography.overline.letterSpacing,
     marginBottom: spacing.xs,
-    fontWeight: '500',
   },
   input: {
     backgroundColor: palette.bg.raised,
@@ -852,21 +873,30 @@ const styles = StyleSheet.create({
   inputFocused: {
     borderColor: palette.accent.primary,
   },
+  fieldErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
   fieldError: {
     color: palette.status.overdue,
     fontSize: typography.caption.size,
-    marginTop: spacing.xs,
+    flex: 1,
   },
   badge: {
     borderWidth: 1,
-    borderRadius: radius.pill,
+    borderRadius: radius.label,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    paddingVertical: 3,
     alignSelf: 'flex-start',
+    backgroundColor: palette.bg.surfaceRaised,
   },
   badgeText: {
-    fontSize: typography.meta.size,
+    fontSize: typography.overline.size,
     fontWeight: '600',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
   statTile: {
     flex: 1,
@@ -982,9 +1012,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.border.subtle,
     backgroundColor: palette.bg.surfaceRaised,
-    borderRadius: radius.pill,
+    borderRadius: radius.label,
     paddingHorizontal: spacing.md,
-    paddingVertical: 6,
+    paddingVertical: spacing.sm,
     marginRight: spacing.sm,
     marginBottom: spacing.sm,
   },
