@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import React, { useMemo } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Button, EmptyState, Screen, VehicleHeroCard } from '@/components/ui';
+import { DueWord, Mute, Rule, ShopScreen, SolidButton } from '@/components/shop';
 import { useAllServiceRecords, useReminders, useVehicles } from '@/lib/db/hooks';
 import { dueSummary, reminderDueState, todayIso, type DueState } from '@/lib/domain/due';
 import { healthScore } from '@/lib/domain/healthScore';
@@ -10,11 +10,7 @@ import { palette, spacing, typography } from '@/lib/theme';
 
 const DUE_RANK: Record<DueState, number> = { overdue: 0, due_soon: 1, upcoming: 2, no_due: 3 };
 
-function nextDueFor(
-  vehicle: Vehicle,
-  reminders: Reminder[],
-  today: string,
-): { title: string; summary: string; state: DueState } | null {
+function nextDueFor(vehicle: Vehicle, reminders: Reminder[], today: string) {
   let best: { title: string; summary: string; state: DueState } | null = null;
   for (const r of reminders) {
     const state = reminderDueState(r, vehicle.mileage, today);
@@ -59,67 +55,74 @@ export default function GarageScreen() {
 
   if (vehicles.length === 0) {
     return (
-      <Screen>
-        <EmptyState
-          title="Nothing in the garage yet"
-          message="Add a car to start logging service, costs, and what’s due."
-          icon="car-outline"
-          action={<Button title="Add your car" onPress={() => router.push('/vehicle/add')} />}
-        />
-      </Screen>
+      <ShopScreen>
+        <View style={styles.empty}>
+          <Text style={styles.emptyTitle}>Garage is empty</Text>
+          <Text style={styles.emptyBody}>One car is enough to start a log.</Text>
+          <SolidButton title="Add a car" onPress={() => router.push('/vehicle/add')} />
+        </View>
+      </ShopScreen>
     );
   }
 
   return (
-    <Screen style={{ padding: 0 }}>
+    <ShopScreen style={{ padding: 0 }}>
       <FlatList
         data={sorted}
         keyExtractor={(item) => item.vehicle.id}
-        contentContainerStyle={{
-          padding: spacing.screenPadding,
-          gap: spacing.md,
-          paddingBottom: spacing['2xl'],
-        }}
+        contentContainerStyle={styles.list}
+        ItemSeparatorComponent={Rule}
         renderItem={({ item }) => {
           const { vehicle, health, nextDue } = item;
-          const plate = `${vehicle.year} ${vehicle.make} ${vehicle.model}${
-            vehicle.trim ? ` ${vehicle.trim}` : ''
-          }`;
+          const plate = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
           return (
-            <VehicleHeroCard
-              photoUri={vehicle.photoUri}
-              nickname={vehicle.nickname}
-              plate={plate}
-              mileage={`${vehicle.mileage.toLocaleString()} mi`}
-              healthScore={health.score}
-              nextDue={nextDue}
+            <Pressable
+              accessibilityRole="button"
               onPress={() => router.push({ pathname: '/vehicle/[id]', params: { id: vehicle.id } })}
-            />
+              style={styles.row}
+            >
+              <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                <Text style={styles.name}>{vehicle.nickname}</Text>
+                <Mute>{`${vehicle.mileage.toLocaleString()} mi · ${plate}`}</Mute>
+                {nextDue ? (
+                  <Text style={styles.next}>
+                    {nextDue.title} · {nextDue.summary}
+                  </Text>
+                ) : (
+                  <Mute>Nothing scheduled</Mute>
+                )}
+              </View>
+              <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                {nextDue ? <DueWord state={nextDue.state} /> : null}
+                <Text style={styles.score}>{health.score}</Text>
+              </View>
+            </Pressable>
           );
         }}
         ListFooterComponent={
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push('/vehicle/add')}
-            style={styles.addAnother}
-          >
-            <Text style={styles.addAnotherText}>Add another vehicle</Text>
+          <Pressable onPress={() => router.push('/vehicle/add')} style={styles.footer}>
+            <Text style={styles.footerText}>Add another car</Text>
           </Pressable>
         }
       />
-    </Screen>
+    </ShopScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  addAnother: {
+  list: { paddingHorizontal: spacing.screenPadding, paddingBottom: spacing['2xl'] },
+  row: {
+    flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: spacing.lg,
-    marginTop: spacing.sm,
+    gap: spacing.md,
   },
-  addAnotherText: {
-    color: palette.accent.primary,
-    fontSize: typography.bodyEmphasis.size,
-    fontWeight: typography.bodyEmphasis.weight,
-  },
+  name: { color: palette.text.primary, fontSize: typography.h3.size, fontWeight: '600' },
+  next: { color: palette.text.secondary, fontSize: typography.caption.size, marginTop: 2 },
+  score: { color: palette.text.tertiary, fontSize: typography.caption.size },
+  footer: { alignItems: 'center', paddingVertical: spacing.xl },
+  footerText: { color: palette.accent.primary, fontSize: typography.bodyEmphasis.size, fontWeight: '600' },
+  empty: { flex: 1, justifyContent: 'center', padding: spacing.screenPadding, gap: spacing.lg },
+  emptyTitle: { color: palette.text.primary, fontSize: typography.hero.size, fontWeight: '600' },
+  emptyBody: { color: palette.text.secondary, fontSize: typography.body.size },
 });

@@ -1,36 +1,36 @@
 /**
- * Glovebox design tokens — dark-mode OnFlow automotive palette.
- * All UI colors/spacing/type come from here; no hex literals in screens.
+ * Glovebox tokens — shop-manual, not neon kit.
+ * Warm paper on grease-black. Gold is the only accent.
  */
 export const palette = {
   bg: {
-    app: '#080A0C',
-    raised: '#0D0F12',
-    surface: '#111417',
-    surfaceRaised: '#171A1E',
-    hero: '#12151A',
+    app: '#141311',
+    raised: '#1A1916',
+    surface: '#1F1D19',
+    surfaceRaised: '#26241F',
+    hero: '#1A1916',
   },
   border: {
-    subtle: '#22272D',
-    default: '#22272D',
+    subtle: '#2E2C27',
+    default: '#3A372F',
   },
   text: {
-    primary: '#F7F7F7',
-    secondary: '#A7ADB5',
-    tertiary: '#747B84',
-    onAccent: '#080A0C',
+    primary: '#F3EDE3',
+    secondary: '#B7AFA3',
+    tertiary: '#7A746A',
+    onAccent: '#141311',
   },
   accent: {
-    primary: '#54FF00',
-    primaryPressed: '#46D400',
-    soft: 'rgba(84, 255, 0, 0.12)',
-    danger: '#FF0044',
-    dangerPressed: '#CC0036',
+    primary: '#E8C56B',
+    primaryPressed: '#C9A84A',
+    soft: 'rgba(232, 197, 107, 0.12)',
+    danger: '#D4523A',
+    dangerPressed: '#B33E2A',
   },
   status: {
-    ok: '#54FF00',
-    dueSoon: '#FBBF24',
-    overdue: '#FF0044',
+    ok: '#C4B48A',
+    dueSoon: '#E8C56B',
+    overdue: '#D4523A',
   },
 } as const;
 
@@ -41,33 +41,33 @@ export const spacing = {
   lg: 16,
   xl: 24,
   '2xl': 32,
-  section: 28,
-  screenPadding: 16,
+  section: 32,
+  screenPadding: 20,
 } as const;
 
 export const radius = {
-  sm: 6,
-  label: 8,
-  md: 10,
-  lg: 14,
-  xl: 16,
-  hero: 18,
+  sm: 4,
+  label: 4,
+  md: 6,
+  lg: 8,
+  xl: 10,
+  hero: 10,
   pill: 999,
 } as const;
 
 export const typography = {
-  display: { size: 32, weight: '700', lineHeight: 38 },
-  plate: { size: 20, weight: '600', lineHeight: 26 },
-  hero: { size: 26, weight: '700', lineHeight: 32 },
-  h1: { size: 24, weight: '700', lineHeight: 30 },
-  h2: { size: 22, weight: '700', lineHeight: 28 },
-  h3: { size: 18, weight: '600', lineHeight: 24 },
-  metric: { size: 26, weight: '700', lineHeight: 32 },
-  body: { size: 15, weight: '400', lineHeight: 21 },
-  bodyEmphasis: { size: 15, weight: '600', lineHeight: 21 },
+  display: { size: 28, weight: '600', lineHeight: 34 },
+  plate: { size: 18, weight: '500', lineHeight: 24 },
+  hero: { size: 22, weight: '600', lineHeight: 28 },
+  h1: { size: 22, weight: '600', lineHeight: 28 },
+  h2: { size: 18, weight: '600', lineHeight: 24 },
+  h3: { size: 16, weight: '600', lineHeight: 22 },
+  metric: { size: 24, weight: '600', lineHeight: 28 },
+  body: { size: 16, weight: '400', lineHeight: 22 },
+  bodyEmphasis: { size: 16, weight: '600', lineHeight: 22 },
   caption: { size: 13, weight: '400', lineHeight: 18 },
   meta: { size: 12, weight: '400', lineHeight: 16 },
-  overline: { size: 11, weight: '600', lineHeight: 14, letterSpacing: 1.2 },
+  overline: { size: 12, weight: '500', lineHeight: 16, letterSpacing: 0.4 },
 } as const;
 
 export type FontWeightString = '400' | '500' | '600' | '700';

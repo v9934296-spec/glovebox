@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import React, { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, EmptyState, ReminderListRow, Screen, SectionLabel } from '@/components/ui';
+import { DueWord, Mute, Rule, ShopScreen, SolidButton, TextButton } from '@/components/shop';
 import { useReminders, useVehicles } from '@/lib/db/hooks';
 import { completeReminder } from '@/lib/db/reminderRepo';
 import { dueSummary, reminderDueState, todayIso, type DueState } from '@/lib/domain/due';
@@ -17,9 +17,9 @@ export default function RemindersScreen() {
   const completed = useReminders({ status: 'completed' });
   const today = todayIso();
 
-  const grouped = useMemo(() => {
+  const groups = useMemo(() => {
     const vehicleById = new Map(vehicles.map((v) => [v.id, v]));
-    const groups: Record<'overdue' | 'due_soon' | 'upcoming', Entry[]> = {
+    const out: Record<'overdue' | 'due_soon' | 'upcoming', Entry[]> = {
       overdue: [],
       due_soon: [],
       upcoming: [],
@@ -28,118 +28,111 @@ export default function RemindersScreen() {
       const vehicle = vehicleById.get(reminder.vehicleId);
       if (!vehicle) continue;
       const state = reminderDueState(reminder, vehicle.mileage, today);
-      if (state === 'no_due') groups.upcoming.push({ reminder, vehicle, state: 'upcoming' });
-      else groups[state].push({ reminder, vehicle, state });
+      if (state === 'no_due') out.upcoming.push({ reminder, vehicle, state: 'upcoming' });
+      else out[state].push({ reminder, vehicle, state });
     }
-    return groups;
+    return out;
   }, [active, vehicles, today]);
-
-  const hasAny = active.length > 0 || completed.length > 0;
 
   if (vehicles.length === 0) {
     return (
-      <Screen>
-        <EmptyState
-          title="No vehicles yet"
-          message="Add a vehicle in Garage, then set reminders."
-          icon="car-outline"
-          action={
-            <Pressable onPress={() => router.push('/garage')}>
-              <Text style={styles.textLink}>Go to Garage</Text>
-            </Pressable>
-          }
-        />
-      </Screen>
+      <ShopScreen>
+        <View style={styles.empty}>
+          <Text style={styles.emptyTitle}>No cars, no reminders</Text>
+          <TextButton label="Go to Garage" onPress={() => router.push('/garage')} />
+        </View>
+      </ShopScreen>
     );
   }
 
-  return (
-    <Screen style={{ padding: 0 }}>
-      <ScrollView
-        contentContainerStyle={{
-          padding: spacing.screenPadding,
-          paddingBottom: spacing['2xl'],
-          gap: spacing.section,
-        }}
-      >
-        <Button title="New reminder" onPress={() => router.push('/reminder/add')} />
+  const empty = active.length === 0 && completed.length === 0;
 
-        {!hasAny ? (
-          <EmptyState
-            title="Nothing scheduled"
-            message="Oil, registration, insurance — anything on a schedule."
-            icon="notifications-outline"
-          />
+  return (
+    <ShopScreen style={{ padding: 0 }}>
+      <ScrollView contentContainerStyle={styles.page}>
+        <SolidButton title="New reminder" onPress={() => router.push('/reminder/add')} />
+
+        {empty ? (
+          <Mute>Oil, registration, insurance — anything on a calendar or an odometer.</Mute>
         ) : (
           <>
-            {grouped.overdue.length > 0 && (
-              <ReminderGroup title="Overdue" entries={grouped.overdue} />
-            )}
-            {grouped.due_soon.length > 0 && (
-              <ReminderGroup title="Due soon" entries={grouped.due_soon} />
-            )}
-            {grouped.upcoming.length > 0 && (
-              <ReminderGroup title="Upcoming" entries={grouped.upcoming} />
-            )}
+            <Group title="Overdue" entries={groups.overdue} />
+            <Group title="Soon" entries={groups.due_soon} />
+            <Group title="Later" entries={groups.upcoming} />
             {completed.length > 0 && (
-              <View>
-                <SectionLabel title="Completed" />
-                <Card style={styles.groupCard}>
-                  {completed.map((r, i) => (
-                    <ReminderListRow
-                      key={r.id}
-                      title={r.title}
-                      meta={`completed ${r.completedAt?.slice(0, 10) ?? ''}`}
-                      completed
-                      showSeparator={i < completed.length - 1}
-                    />
-                  ))}
-                </Card>
+              <View style={{ gap: spacing.md }}>
+                <Text style={styles.groupTitle}>Done</Text>
+                {completed.map((r) => (
+                  <Text key={r.id} style={styles.doneLine}>
+                    {r.title}
+                    {r.completedAt ? ` · ${r.completedAt.slice(0, 10)}` : ''}
+                  </Text>
+                ))}
               </View>
             )}
           </>
         )}
       </ScrollView>
-    </Screen>
+    </ShopScreen>
   );
 }
 
-function ReminderGroup({ title, entries }: { title: string; entries: Entry[] }) {
+function Group({ title, entries }: { title: string; entries: Entry[] }) {
   const router = useRouter();
   const today = todayIso();
+  if (entries.length === 0) return null;
   return (
     <View>
-      <SectionLabel title={title} />
-      <Card style={styles.groupCard}>
-        {entries.map((e, i) => (
-          <ReminderListRow
-            key={e.reminder.id}
-            title={e.reminder.title}
-            meta={`${e.vehicle.nickname} · ${dueSummary({
-              dueDate: e.reminder.dueDate,
-              dueMileage: e.reminder.dueMileage,
-              currentMileage: e.vehicle.mileage,
-              today,
-            })}${e.reminder.recurrenceType !== 'none' ? ' · recurring' : ''}`}
-            state={e.state}
-            showSeparator={i < entries.length - 1}
-            onPress={() => router.push({ pathname: '/vehicle/[id]', params: { id: e.vehicle.id } })}
-            onDone={() => completeReminder(e.reminder, e.vehicle.mileage)}
-          />
-        ))}
-      </Card>
+      <Text style={styles.groupTitle}>{title}</Text>
+      {entries.map((e, i) => (
+        <View key={e.reminder.id}>
+          {i > 0 ? <Rule /> : null}
+          <View style={styles.row}>
+            <Pressable
+              style={{ flex: 1, gap: 2 }}
+              onPress={() => router.push({ pathname: '/vehicle/[id]', params: { id: e.vehicle.id } })}
+            >
+              <View style={styles.titleRow}>
+                <Text style={styles.title}>{e.reminder.title}</Text>
+                <DueWord state={e.state} />
+              </View>
+              <Mute>
+                {`${e.vehicle.nickname} · ${dueSummary({
+                  dueDate: e.reminder.dueDate,
+                  dueMileage: e.reminder.dueMileage,
+                  currentMileage: e.vehicle.mileage,
+                  today,
+                })}`}
+              </Mute>
+            </Pressable>
+            <TextButton
+              label="Done"
+              tone="mute"
+              onPress={() => completeReminder(e.reminder, e.vehicle.mileage)}
+            />
+          </View>
+        </View>
+      ))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  groupCard: {
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
+  page: {
+    padding: spacing.screenPadding,
+    paddingBottom: spacing['2xl'],
+    gap: spacing.section,
   },
-  textLink: {
-    color: palette.accent.primary,
-    fontSize: typography.bodyEmphasis.size,
-    fontWeight: '600',
+  groupTitle: {
+    color: palette.text.tertiary,
+    fontSize: typography.overline.size,
+    fontWeight: '500',
+    marginBottom: spacing.sm,
   },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  title: { color: palette.text.primary, fontSize: typography.bodyEmphasis.size, fontWeight: '600', flex: 1 },
+  doneLine: { color: palette.text.tertiary, fontSize: typography.caption.size, paddingVertical: 4 },
+  empty: { flex: 1, justifyContent: 'center', padding: spacing.screenPadding, gap: spacing.lg },
+  emptyTitle: { color: palette.text.primary, fontSize: typography.hero.size, fontWeight: '600' },
 });

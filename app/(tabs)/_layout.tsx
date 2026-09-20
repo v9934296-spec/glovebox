@@ -1,20 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs, useRouter } from 'expo-router';
 import React from 'react';
-import { Pressable } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 import { palette } from '@/lib/theme';
 
-function HeaderAddButton({ label, href }: { label: string; href: '/vehicle/add' | '/reminder/add' }) {
+function HeaderAdd({ label, href }: { label: string; href: '/vehicle/add' | '/reminder/add' }) {
   const router = useRouter();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={() => router.push(href)}
-      style={{ marginRight: 12, padding: 4 }}
+      style={{ marginRight: 16, padding: 4 }}
       hitSlop={8}
     >
-      <Ionicons name="add" size={26} color={palette.accent.primary} />
+      <Text style={{ color: palette.accent.primary, fontSize: 16, fontWeight: '600' }}>{label}</Text>
     </Pressable>
   );
 }
@@ -26,33 +26,33 @@ export default function TabsLayout() {
         headerStyle: { backgroundColor: palette.bg.app },
         headerShadowVisible: false,
         headerTintColor: palette.text.primary,
-        headerTitleStyle: { fontWeight: '700', fontSize: 22 },
+        headerTitleStyle: { fontWeight: '600', fontSize: 18 },
         tabBarStyle: {
           backgroundColor: palette.bg.raised,
           borderTopColor: palette.border.subtle,
-          borderTopWidth: 1,
+          borderTopWidth: StyleSheet.hairlineWidth,
         },
-        tabBarActiveTintColor: palette.accent.primary,
+        tabBarActiveTintColor: palette.text.primary,
         tabBarInactiveTintColor: palette.text.tertiary,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '500' },
         sceneStyle: { backgroundColor: palette.bg.app },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Glovebox',
+          title: 'Overview',
           tabBarLabel: 'Overview',
-          tabBarIcon: ({ color, size }) => <Ionicons name="speedometer-outline" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="reader-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="garage"
         options={{
-          title: 'My Garage',
+          title: 'Garage',
           tabBarLabel: 'Garage',
-          headerRight: () => <HeaderAddButton label="Add vehicle" href="/vehicle/add" />,
-          tabBarIcon: ({ color, size }) => <Ionicons name="car-sport-outline" size={size} color={color} />,
+          headerRight: () => <HeaderAdd label="Add car" href="/vehicle/add" />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="car-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -60,16 +60,16 @@ export default function TabsLayout() {
         options={{
           title: 'Reminders',
           tabBarLabel: 'Reminders',
-          headerRight: () => <HeaderAddButton label="New reminder" href="/reminder/add" />,
-          tabBarIcon: ({ color, size }) => <Ionicons name="notifications-outline" size={size} color={color} />,
+          headerRight: () => <HeaderAdd label="Add" href="/reminder/add" />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="time-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
           title: 'Settings',
-          tabBarLabel: 'More',
-          tabBarIcon: ({ color, size }) => <Ionicons name="ellipsis-horizontal-circle-outline" size={size} color={color} />,
+          tabBarLabel: 'Settings',
+          tabBarIcon: ({ color, size }) => <Ionicons name="settings-outline" size={size} color={color} />,
         }}
       />
     </Tabs>
