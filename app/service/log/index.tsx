@@ -110,7 +110,7 @@ export default function LogServiceStepWhat() {
     );
   }
 
-  const ymm = car ? \`\${car.year}  \${car.make.toUpperCase()}  \${car.model.toUpperCase()}\` : '';
+  const ymm = car ? String(car.year) + '  ' + car.make.toUpperCase() + '  ' + car.model.toUpperCase() : '';
   const job = draft.serviceType ? serviceTypeLabel(draft.serviceType).toUpperCase() : '';
 
   return (
