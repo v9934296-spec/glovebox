@@ -1,28 +1,51 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Screen } from '@/components/ui';
-import { FlowFooter, ReviewRow } from '@/components/flow';
+import { Alert, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  BlackBar,
+  Cell,
+  Check,
+  FormFrame,
+  GhostLink,
+  Line,
+  Sheet,
+  WorkButton,
+} from '@/components/form';
+import { useVehicle } from '@/lib/db/hooks';
 import { formatIsoLong } from '@/lib/domain/dates';
 import { formatMoney } from '@/lib/domain/expenses';
 import { serviceTypeLabel } from '@/lib/domain/serviceTypes';
-import { draftCost, draftMileage, useServiceDraft, type AiField } from '@/lib/forms/serviceDraft';
+import { draftCost, draftMileage, useServiceDraft } from '@/lib/forms/serviceDraft';
 import { saveServiceDraft } from '@/lib/forms/saveService';
-import { palette, radius, spacing, typography } from '@/lib/theme';
 
-/**
- * Read-back of a scanned receipt. Fields the model returned are marked with a
- * dot; fields it could not read say so out loud rather than sitting blank —
- * an assistant that admits what it missed is easier to trust.
- */
+const BOXES: { id: string; label: string }[] = [
+  { id: 'oil_change', label: 'OIL' },
+  { id: 'spark_plugs', label: 'TUNE UP' },
+  { id: 'brakes', label: 'BRAKES' },
+  { id: 'tires', label: 'TIRES' },
+  { id: 'repair', label: 'DIAGNOSTIC' },
+  { id: 'other', label: 'OTHER' },
+];
+
 export default function LogServiceConfirm() {
   const router = useRouter();
   const draft = useServiceDraft();
-
-  const filled = (field: AiField) => draft.aiFields.includes(field);
+  const vehicle = useVehicle(draft.vehicleId ?? undefined);
   const mileage = draftMileage(draft);
   const cost = draftCost(draft);
+  const job = draft.serviceType ? serviceTypeLabel(draft.serviceType).toUpperCase() : '';
+  const ymm = vehicle
+    ? String(vehicle.year) +
+      ' ' +
+      vehicle.make +
+      ' ' +
+      vehicle.model +
+      (vehicle.trim ? ' ' + vehicle.trim : '')
+    : '';
+  const boxed = BOXES.map((b) => b.id);
+  const typeOn = (id: string) =>
+    draft.serviceType === id ||
+    (id === 'other' && draft.serviceType != null && !boxed.includes(draft.serviceType));
 
   function cancel() {
     useServiceDraft.getState().reset();
@@ -32,162 +55,119 @@ export default function LogServiceConfirm() {
   function save() {
     const result = saveServiceDraft();
     if (!result.ok) {
-      Alert.alert('Not saved', result.reason);
+      Alert.alert('Not filed', result.reason);
       return;
     }
     router.dismissAll();
   }
 
   return (
-    <Screen style={{ padding: 0 }}>
-      <ScrollView
-        contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'] }}
-      >
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button" accessibilityLabel="Back">
-            <Ionicons name="chevron-back" size={24} color={palette.text.primary} />
-          </Pressable>
-          <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button">
-            <Text style={styles.retake}>Retake</Text>
-          </Pressable>
+    <Sheet>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <View style={styles.top}>
+          <GhostLink title="Back" onPress={() => router.back()} />
+          <GhostLink title="Void" onPress={cancel} />
         </View>
 
-        <View style={styles.hero}>
-          {draft.receiptUri != null ? (
-            <Image source={{ uri: draft.receiptUri }} style={styles.receipt} />
-          ) : (
-            <View style={[styles.receipt, styles.receiptPlaceholder]}>
-              <Ionicons name="receipt-outline" size={30} color={palette.text.tertiary} />
+        <View style={styles.stage}>
+          <FormFrame>
+            <View style={styles.head}>
+              <View style={{ flex: 1, paddingRight: 76 }}>
+                <Text style={styles.shop}>GLOVEBOX</Text>
+                <Text style={styles.shopSub}>SERVICE JACKET</Text>
+              </View>
+              <Text style={styles.docTitle}>AUTOMOTIVE{'\n'}REPAIR</Text>
             </View>
-          )}
-          <View style={{ flex: 1 }}>
-            <View style={styles.scannedPill}>
-              <Ionicons name="sparkles-outline" size={14} color={palette.accent.primary} />
-              <Text style={styles.scannedText}>Scanned</Text>
+
+            <View style={styles.row}>
+              <Cell label="YEAR MAKE AND MODEL" value={ymm.toUpperCase()} flex={1.5} />
+              <Cell label="ODOMETER" value={mileage != null ? mileage.toLocaleString() : ''} flex={0.8} />
             </View>
-            <Text style={styles.title}>Check these over</Text>
-            <Text style={styles.subtitle}>
-              We filled in what we could read. Tap any line to fix it.
-            </Text>
-          </View>
+            <View style={styles.row}>
+              <Cell label="DATE" value={formatIsoLong(draft.date).toUpperCase()} />
+              <Cell label="SHOP" value={draft.shopName.trim().toUpperCase()} />
+            </View>
+
+            <View style={styles.checks}>
+              {BOXES.map((b) => (
+                <Check key={b.id} label={b.label} on={typeOn(b.id)} onPress={() => draft.setServiceType(b.id)} />
+              ))}
+            </View>
+
+            <BlackBar title="DESCRIPTION OF WORK" />
+            <Line n={1} job={job} amount={cost != null ? formatMoney(cost) : ''} />
+            <Line n={2} job="" amount="" />
+
+            <View style={styles.totalRow}>
+              <View style={styles.notes}>
+                <Text style={styles.notesLabel}>NOTES / REMARKS</Text>
+                <Text style={styles.notesVal}>{draft.notes.trim() || ' '}</Text>
+              </View>
+              <View style={styles.totalBox}>
+                <Text style={styles.notesLabel}>TOTAL</Text>
+                <Text style={styles.total}>{cost != null ? formatMoney(cost) : '—'}</Text>
+              </View>
+            </View>
+          </FormFrame>
+
+          {draft.receiptUri != null && <Image source={{ uri: draft.receiptUri }} style={styles.staple} />}
         </View>
 
-        <View style={styles.card}>
-          <ReviewRow
-            label="Service"
-            value={draft.serviceType != null ? serviceTypeLabel(draft.serviceType) : 'Not set'}
-            missing={draft.serviceType == null}
-            aiFilled={filled('serviceType')}
-            onPress={() => router.back()}
-          />
-          <ReviewRow
-            label="Date"
-            value={formatIsoLong(draft.date)}
-            aiFilled={filled('date')}
-            onPress={() => router.push('/service/log/when')}
-          />
-          <ReviewRow
-            label="Total"
-            value={cost != null ? formatMoney(cost) : "Couldn't read — add"}
-            missing={cost == null}
-            aiFilled={filled('cost')}
-            onPress={() => router.push('/service/log/when')}
-          />
-          <ReviewRow
-            label="Odometer"
-            value={mileage != null ? `${mileage.toLocaleString()} mi` : "Couldn't read — add"}
-            missing={mileage == null}
-            aiFilled={filled('mileage')}
-            onPress={() => router.push('/service/log/when')}
-          />
-          <ReviewRow
-            label="Shop"
-            value={draft.shopName.trim() !== '' ? draft.shopName : "Couldn't read — add"}
-            missing={draft.shopName.trim() === ''}
-            aiFilled={filled('shopName')}
-            onPress={() => router.push('/service/log/extras')}
-            last
-          />
-        </View>
-
-        <View style={styles.legend}>
-          <View style={styles.legendDot} />
-          <Text style={styles.legendText}>Filled in from the receipt</Text>
-        </View>
-
-        <FlowFooter
-          primaryLabel={draft.saving ? 'Saving…' : 'Save record'}
-          onPrimary={save}
-          primaryDisabled={draft.saving || draft.serviceType == null}
-          secondaryLabel="Cancel"
-          onSecondary={cancel}
-        />
+        <WorkButton title={draft.saving ? 'Filing…' : 'File ticket'} onPress={save} disabled={draft.saving || !draft.serviceType} />
       </ScrollView>
-    </Screen>
+    </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
+  scroll: { paddingBottom: 32 },
+  top: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.lg,
   },
-  retake: { color: palette.text.secondary, fontSize: typography.body.size },
-  hero: { flexDirection: 'row', gap: spacing.lg, marginBottom: spacing.xl },
-  receipt: { width: 84, height: 108, borderRadius: radius.md },
-  receiptPlaceholder: {
-    backgroundColor: palette.bg.surfaceRaised,
-    borderWidth: 1,
-    borderColor: palette.border.default,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scannedPill: {
+  stage: { position: 'relative' },
+  head: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    alignSelf: 'flex-start',
-    backgroundColor: palette.bg.surfaceRaised,
-    borderRadius: radius.label,
-    borderWidth: 1,
-    borderColor: palette.accent.primary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    marginBottom: spacing.sm,
+    alignItems: 'flex-start',
+    padding: 10,
+    borderBottomWidth: 2,
+    borderColor: '#111',
   },
-  scannedText: {
-    color: palette.accent.primary,
-    fontSize: typography.overline.size,
-    fontWeight: typography.overline.weight,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
-  title: {
-    color: palette.text.primary,
-    fontSize: typography.h3.size,
-    fontWeight: typography.h3.weight,
-  },
-  subtitle: {
-    color: palette.text.secondary,
-    fontSize: typography.caption.size,
-    marginTop: spacing.xs,
-    lineHeight: typography.caption.lineHeight,
-  },
-  card: {
-    backgroundColor: palette.bg.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: palette.border.subtle,
-    overflow: 'hidden',
-  },
-  legend: {
+  shop: { fontSize: 16, fontWeight: '800', color: '#111' },
+  shopSub: { fontSize: 9, letterSpacing: 1.2, color: '#5C5C5C', marginTop: 2 },
+  docTitle: { fontSize: 13, fontWeight: '800', color: '#111', textAlign: 'right', letterSpacing: 1 },
+  row: { flexDirection: 'row' },
+  checks: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.md,
+    flexWrap: 'wrap',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderColor: '#111',
   },
-  legendDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: palette.accent.primary },
-  legendText: { color: palette.text.tertiary, fontSize: typography.caption.size },
+  totalRow: { flexDirection: 'row', borderTopWidth: 2, borderColor: '#111' },
+  notes: { flex: 1, padding: 10, minHeight: 64 },
+  notesLabel: { color: '#5C5C5C', fontSize: 8, fontWeight: '700', letterSpacing: 0.6 },
+  notesVal: { color: '#111', fontSize: 13, fontWeight: '700', marginTop: 4 },
+  totalBox: {
+    width: 118,
+    borderLeftWidth: 2,
+    borderColor: '#111',
+    padding: 10,
+    justifyContent: 'flex-end',
+  },
+  total: { color: '#111', fontSize: 22, fontWeight: '800', marginTop: 2 },
+  staple: {
+    position: 'absolute',
+    right: 22,
+    top: 14,
+    width: 64,
+    height: 80,
+    borderWidth: 1,
+    borderColor: '#111',
+    backgroundColor: '#EFEAE0',
+  },
 });
