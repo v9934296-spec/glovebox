@@ -1,9 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -14,15 +12,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Screen } from '@/components/ui';
-import { FlowFooter, FlowHeader, StepProgress } from '@/components/flow';
+import { GhostLink, WorkButton } from '@/components/form';
 import { useServiceDraft } from '@/lib/forms/serviceDraft';
-import { saveServiceDraft } from '@/lib/forms/saveService';
 import { canAttachReceipt } from '@/lib/monetization/entitlements';
 import { useIsPro } from '@/lib/monetization/purchases';
-import { palette, radius, spacing, typography } from '@/lib/theme';
-
-const TOTAL_STEPS = 3;
 
 export default function LogServiceStepExtras() {
   const router = useRouter();
@@ -40,160 +33,149 @@ export default function LogServiceStepExtras() {
       router.push('/paywall');
       return;
     }
+
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.6 });
     const uri = result.assets?.[0]?.uri;
     if (!result.canceled && uri != null) draft.setReceiptUri(uri);
   }
 
-  function save() {
-    const result = saveServiceDraft();
-    if (!result.ok) {
-      Alert.alert('Not saved', result.reason);
-      return;
-    }
-    router.dismissAll();
+  function review() {
+    router.push('/service/log/confirm');
   }
 
   return (
-    <Screen style={{ padding: 0 }}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView
-          contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'] }}
-          keyboardShouldPersistTaps="handled"
-        >
-          <FlowHeader step={3} total={TOTAL_STEPS} onBack={() => router.back()} onCancel={cancel} />
-          <StepProgress step={3} total={TOTAL_STEPS} />
+    <View style={styles.page}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={styles.top}>
+            <GhostLink title="Back" onPress={() => router.back()} />
+            <GhostLink title="Void" onPress={cancel} />
+          </View>
 
-          <Text style={styles.title}>Anything else?</Text>
-          <Text style={styles.subtitle}>All optional — you can save right now.</Text>
+          <Text style={styles.brand}>GLOVEBOX</Text>
+          <Text style={styles.doc}>REPAIR ORDER  /  SHOP NOTES</Text>
 
-          <View style={{ height: spacing.xl }} />
-
-          <Text style={styles.overline}>SHOP</Text>
+          <Text style={styles.label}>SHOP</Text>
           <TextInput
             value={draft.shopName}
             onChangeText={draft.setShopName}
-            placeholder="Mike's Auto"
-            placeholderTextColor={palette.text.tertiary}
+            placeholder="MIKE'S AUTO"
+            placeholderTextColor={MUTE}
             accessibilityLabel="Shop name"
-            style={styles.input}
+            autoCapitalize="words"
+            style={styles.lineInput}
           />
 
-          <View style={{ height: spacing.lg }} />
+          <View style={styles.rule} />
 
-          <Text style={styles.overline}>NOTES</Text>
+          <Text style={styles.label}>NOTES / REMARKS</Text>
           <TextInput
             value={draft.notes}
             onChangeText={draft.setNotes}
-            placeholder="Anything worth remembering later"
-            placeholderTextColor={palette.text.tertiary}
+            placeholder="ANYTHING WORTH REMEMBERING LATER"
+            placeholderTextColor={MUTE}
             multiline
             accessibilityLabel="Notes"
-            style={[styles.input, styles.multiline]}
+            style={styles.notes}
           />
 
-          <View style={{ height: spacing.lg }} />
+          <View style={styles.rule} />
 
+          <Text style={styles.label}>SHOP TICKET</Text>
           <Pressable
             onPress={() => void attachReceipt()}
             accessibilityRole="button"
-            style={({ pressed }) => [styles.receiptRow, pressed && { opacity: 0.8 }]}
+            style={({ pressed }) => [styles.receiptRow, pressed && { opacity: 0.7 }]}
           >
             {draft.receiptUri != null ? (
               <Image source={{ uri: draft.receiptUri }} style={styles.receiptThumb} />
             ) : (
               <View style={styles.receiptPlaceholder}>
-                <Ionicons name="attach-outline" size={20} color={palette.text.secondary} />
+                <Text style={styles.receiptMark}>+</Text>
               </View>
             )}
-            <Text style={styles.receiptText}>
-              {draft.receiptUri != null ? 'Change receipt photo' : 'Attach receipt photo'}
-            </Text>
-            {!isPro && (
-              <View style={styles.proPill}>
-                <Text style={styles.proPillText}>Pro</Text>
-              </View>
-            )}
+
+            <View style={{ flex: 1 }}>
+              <Text style={styles.receiptTitle}>
+                {draft.receiptUri != null ? 'TICKET ATTACHED' : 'ATTACH RECEIPT PHOTO'}
+              </Text>
+              <Text style={styles.receiptMeta}>
+                {draft.receiptUri != null
+                  ? 'TAP TO REPLACE'
+                  : isPro
+                    ? 'CHOOSE FROM PHOTO LIBRARY'
+                    : 'PRO FEATURE'}
+              </Text>
+            </View>
           </Pressable>
 
-          <FlowFooter
-            primaryLabel={draft.saving ? 'Saving…' : 'Save record'}
-            onPrimary={save}
-            primaryDisabled={draft.saving}
-            secondaryLabel="Skip"
-            onSecondary={save}
-          />
+          <View style={styles.reviewNote}>
+            <Text style={styles.reviewNoteTitle}>READY FOR THE JACKET</Text>
+            <Text style={styles.reviewNoteText}>
+              Review the completed ticket before anything is filed to service history.
+            </Text>
+          </View>
         </ScrollView>
+
+        <WorkButton title="Review ticket" onPress={review} disabled={!draft.serviceType} />
       </KeyboardAvoidingView>
-    </Screen>
+    </View>
   );
 }
 
+const INK = '#111111';
+const MUTE = '#5C5C5C';
+const PAGE = '#F4EFE4';
+
 const styles = StyleSheet.create({
-  title: {
-    color: palette.text.primary,
-    fontSize: typography.h2.size,
-    fontWeight: typography.h2.weight,
+  page: { flex: 1, backgroundColor: PAGE },
+  scroll: { paddingHorizontal: 22, paddingTop: 8, paddingBottom: 12 },
+  top: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 18 },
+  brand: { color: INK, fontSize: 28, fontWeight: '800', letterSpacing: -0.6 },
+  doc: { color: INK, fontSize: 12, fontWeight: '800', letterSpacing: 1.5, marginTop: 2, marginBottom: 28 },
+  label: { color: MUTE, fontSize: 9, fontWeight: '800', letterSpacing: 1.1, marginBottom: 6 },
+  lineInput: {
+    color: INK,
+    fontSize: 20,
+    fontWeight: '700',
+    borderBottomWidth: 1,
+    borderColor: INK,
+    paddingVertical: 8,
   },
-  subtitle: {
-    color: palette.text.secondary,
-    fontSize: typography.body.size,
-    marginTop: spacing.xs,
+  notes: {
+    color: INK,
+    fontSize: 16,
+    fontWeight: '600',
+    lineHeight: 23,
+    minHeight: 112,
+    borderBottomWidth: 1,
+    borderColor: INK,
+    paddingVertical: 8,
+    textAlignVertical: 'top',
   },
-  overline: {
-    color: palette.text.tertiary,
-    fontSize: typography.overline.size,
-    fontWeight: typography.overline.weight,
-    letterSpacing: typography.overline.letterSpacing,
-    marginBottom: spacing.sm,
-  },
-  input: {
-    backgroundColor: palette.bg.surface,
-    borderWidth: 1,
-    borderColor: palette.border.subtle,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 14,
-    color: palette.text.primary,
-    fontSize: typography.body.size,
-  },
-  multiline: { minHeight: 88, textAlignVertical: 'top' },
+  rule: { height: 1, backgroundColor: INK, marginVertical: 22, opacity: 0.85 },
   receiptRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.md,
+    gap: 12,
     borderWidth: 1,
-    borderColor: palette.border.subtle,
-    backgroundColor: palette.bg.surface,
+    borderColor: INK,
+    padding: 10,
   },
-  receiptThumb: { width: 44, height: 44, borderRadius: radius.sm },
+  receiptThumb: { width: 58, height: 72, borderWidth: 1, borderColor: INK },
   receiptPlaceholder: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.sm,
-    backgroundColor: palette.bg.surfaceRaised,
+    width: 58,
+    height: 72,
+    borderWidth: 1,
+    borderColor: INK,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#EFEAE0',
   },
-  receiptText: { flex: 1, color: palette.text.primary, fontSize: typography.body.size },
-  proPill: {
-    borderRadius: radius.label,
-    borderWidth: 1,
-    borderColor: palette.accent.primary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    backgroundColor: palette.accent.soft,
-  },
-  proPillText: {
-    color: palette.accent.primary,
-    fontSize: typography.overline.size,
-    fontWeight: typography.overline.weight,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
+  receiptMark: { color: INK, fontSize: 30, fontWeight: '400' },
+  receiptTitle: { color: INK, fontSize: 12, fontWeight: '800', letterSpacing: 0.8 },
+  receiptMeta: { color: MUTE, fontSize: 9, fontWeight: '700', letterSpacing: 0.6, marginTop: 5 },
+  reviewNote: { marginTop: 22, borderTopWidth: 1, borderColor: INK, paddingTop: 14 },
+  reviewNoteTitle: { color: INK, fontSize: 10, fontWeight: '800', letterSpacing: 1.1 },
+  reviewNoteText: { color: MUTE, fontSize: 11, lineHeight: 17, marginTop: 5 },
 });
