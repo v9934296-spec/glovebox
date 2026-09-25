@@ -1,14 +1,13 @@
 import { Stack } from 'expo-router';
 import React from 'react';
-import { palette } from '@/lib/theme';
+import { paper } from '@/components/form';
 
-/** Each step owns its own header (FlowHeader), so the native one stays hidden. */
 export default function LogServiceLayout() {
   return (
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: palette.bg.app },
+        contentStyle: { backgroundColor: paper.sheet },
         animation: 'slide_from_right',
       }}
     >
