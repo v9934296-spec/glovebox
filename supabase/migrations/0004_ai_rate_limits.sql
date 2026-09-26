@@ -59,7 +59,7 @@ begin
     return;
   end if;
 
-  if p_task not in ('scan_receipt', 'explain_repair', 'check_cost') then
+  if p_task is null or p_task not in ('scan_receipt', 'explain_repair', 'check_cost') then
     return query select false, 'invalid_task'::text, 0, 0, 0;
     return;
   end if;
@@ -73,11 +73,23 @@ begin
   -- race through the counters before either request writes its event.
   perform pg_advisory_xact_lock(hashtext(p_user_id::text), 0);
 
-  select count(*), min(requested_at)
-    into v_minute_count, v_oldest_recent
+  -- One indexed scan gives every counter used below. Quotas reset on UTC day
+  -- and UTC month boundaries; the 2/minute guard is a rolling 60-second window.
+  select
+    count(*) filter (where requested_at >= v_now - interval '60 seconds'),
+    min(requested_at) filter (where requested_at >= v_now - interval '60 seconds'),
+    count(*) filter (where requested_at >= v_day_start),
+    count(*),
+    count(*) filter (where requested_at >= v_day_start and task = p_task)
+  into
+    v_minute_count,
+    v_oldest_recent,
+    v_daily_count,
+    v_monthly_count,
+    v_task_daily_count
   from public.ai_usage_events
   where user_id = p_user_id
-    and requested_at > v_now - interval '60 seconds';
+    and requested_at >= v_month_start;
 
   if v_minute_count >= p_per_minute then
     v_retry := greatest(
@@ -92,15 +104,6 @@ begin
       greatest(0, p_monthly_total - v_monthly_count)::integer;
     return;
   end if;
-
-  select
-    count(*) filter (where requested_at >= v_day_start),
-    count(*),
-    count(*) filter (where requested_at >= v_day_start and task = p_task)
-  into v_daily_count, v_monthly_count, v_task_daily_count
-  from public.ai_usage_events
-  where user_id = p_user_id
-    and requested_at >= v_month_start;
 
   if v_monthly_count >= p_monthly_total then
     v_retry := greatest(
