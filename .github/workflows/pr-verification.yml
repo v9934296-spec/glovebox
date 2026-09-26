@@ -42,4 +42,4 @@ jobs:
         run: pnpm typecheck
 
       - name: Check Supabase AI Edge Function
-        run: deno check supabase/functions/ai/index.ts
+        run: deno check --node-modules-dir=auto supabase/functions/ai/index.ts
