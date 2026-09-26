@@ -47,6 +47,7 @@ declare
   v_now timestamptz := now();
   v_day_start timestamptz := date_trunc('day', v_now);
   v_month_start timestamptz := date_trunc('month', v_now);
+  v_scan_start timestamptz := least(date_trunc('month', v_now), v_now - interval '60 seconds');
   v_minute_count bigint := 0;
   v_daily_count bigint := 0;
   v_monthly_count bigint := 0;
@@ -75,11 +76,13 @@ begin
 
   -- One indexed scan gives every counter used below. Quotas reset on UTC day
   -- and UTC month boundaries; the 2/minute guard is a rolling 60-second window.
+  -- v_scan_start reaches into the prior month when needed so a request at a
+  -- month boundary cannot bypass the rolling minute limit.
   select
     count(*) filter (where requested_at >= v_now - interval '60 seconds'),
     min(requested_at) filter (where requested_at >= v_now - interval '60 seconds'),
     count(*) filter (where requested_at >= v_day_start),
-    count(*),
+    count(*) filter (where requested_at >= v_month_start),
     count(*) filter (where requested_at >= v_day_start and task = p_task)
   into
     v_minute_count,
@@ -89,7 +92,7 @@ begin
     v_task_daily_count
   from public.ai_usage_events
   where user_id = p_user_id
-    and requested_at >= v_month_start;
+    and requested_at >= v_scan_start;
 
   if v_minute_count >= p_per_minute then
     v_retry := greatest(
