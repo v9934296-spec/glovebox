@@ -6,7 +6,7 @@
 //
 // Deploy: supabase functions deploy ai
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
+import { withSupabase } from 'npm:@supabase/server@1.8.0';
 
 type Task = 'scan_receipt' | 'explain_repair' | 'check_cost';
 
@@ -52,6 +52,7 @@ const MODEL = Deno.env.get('OPENAI_MODEL') ?? 'gpt-4o-mini';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Expose-Headers': 'retry-after, x-ratelimit-remaining-day, x-ratelimit-remaining-month',
 };
 
@@ -221,130 +222,124 @@ function rateLimitMessage(task: Task, reason: string | null): string {
   return "You've reached today's AI limit.";
 }
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
+Deno.serve(
+  withSupabase(
+    {
+      auth: 'user',
+      cors: { headers: corsHeaders },
+    },
+    async (req, ctx) => {
+      if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
 
-  const apiKey = Deno.env.get('OPENAI_API_KEY');
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!apiKey) return json({ error: 'AI is not configured on the server (missing OPENAI_API_KEY secret)' }, 501);
-  if (!supabaseUrl || !anonKey || !serviceRoleKey) {
-    return json({ error: 'AI quota enforcement is not configured on the server.' }, 503);
-  }
+      const apiKey = Deno.env.get('OPENAI_API_KEY');
+      if (!apiKey) {
+        return json({ error: 'AI is not configured on the server (missing OPENAI_API_KEY secret)' }, 501);
+      }
 
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader) return json({ error: 'Sign in to use AI features.' }, 401);
+      const userId = ctx.userClaims?.id;
+      if (!userId) return json({ error: 'Invalid or expired session.' }, 401);
 
-  const userClient = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: authHeader } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const {
-    data: { user },
-    error: userError,
-  } = await userClient.auth.getUser();
-  if (userError || !user) return json({ error: 'Invalid or expired session.' }, 401);
+      let body: Record<string, unknown>;
+      try {
+        body = await req.json();
+      } catch {
+        return json({ error: 'Invalid JSON body' }, 400);
+      }
 
-  let body: Record<string, unknown>;
-  try {
-    body = await req.json();
-  } catch {
-    return json({ error: 'Invalid JSON body' }, 400);
-  }
+      const task = body.task as Task;
+      if (task !== 'scan_receipt' && task !== 'explain_repair' && task !== 'check_cost') {
+        return json({ error: `Unknown task: ${String(body.task)}` }, 400);
+      }
 
-  const task = body.task as Task;
-  if (task !== 'scan_receipt' && task !== 'explain_repair' && task !== 'check_cost') {
-    return json({ error: `Unknown task: ${String(body.task)}` }, 400);
-  }
+      let messages: Array<{ role: string; content: ChatContent }>;
+      try {
+        messages = buildMessages(task, body);
+      } catch (e) {
+        return json({ error: e instanceof Error ? e.message : 'Bad request' }, 400);
+      }
 
-  let messages: Array<{ role: string; content: ChatContent }>;
-  try {
-    messages = buildMessages(task, body);
-  } catch (e) {
-    return json({ error: e instanceof Error ? e.message : 'Bad request' }, 400);
-  }
+      const { data: quotaData, error: quotaError } = await ctx.supabaseAdmin.rpc('consume_ai_quota', {
+        p_user_id: userId,
+        p_task: task,
+        p_per_minute: LIMITS.perMinute,
+        p_daily_total: LIMITS.perDay,
+        p_monthly_total: LIMITS.perMonth,
+        p_task_daily_limit: LIMITS.perTaskPerDay[task],
+      });
 
-  const admin = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data: quotaData, error: quotaError } = await admin.rpc('consume_ai_quota', {
-    p_user_id: user.id,
-    p_task: task,
-    p_per_minute: LIMITS.perMinute,
-    p_daily_total: LIMITS.perDay,
-    p_monthly_total: LIMITS.perMonth,
-    p_task_daily_limit: LIMITS.perTaskPerDay[task],
-  });
+      if (quotaError) {
+        console.error('AI quota check failed', quotaError.message);
+        // Fail closed: if the quota system is unavailable, do not spend model money.
+        return json({ error: 'AI is temporarily unavailable. Try again later.' }, 503);
+      }
 
-  if (quotaError) {
-    console.error('AI quota check failed', quotaError.message);
-    // Fail closed: if the quota system is unavailable, do not spend model money.
-    return json({ error: 'AI is temporarily unavailable. Try again later.' }, 503);
-  }
+      const quota = (Array.isArray(quotaData) ? quotaData[0] : quotaData) as QuotaRow | null;
+      if (!quota) {
+        console.error('AI quota check returned no row');
+        return json({ error: 'AI is temporarily unavailable. Try again later.' }, 503);
+      }
 
-  const quota = (Array.isArray(quotaData) ? quotaData[0] : quotaData) as QuotaRow | null;
-  if (!quota) {
-    console.error('AI quota check returned no row');
-    return json({ error: 'AI is temporarily unavailable. Try again later.' }, 503);
-  }
+      if (!quota.allowed) {
+        const retryAfter = Math.max(1, quota.retry_after_seconds || 1);
+        return json(
+          {
+            error: rateLimitMessage(task, quota.reason),
+            code: 'ai_rate_limited',
+            retryAfterSeconds: retryAfter,
+          },
+          429,
+          { 'Retry-After': String(retryAfter) },
+        );
+      }
 
-  if (!quota.allowed) {
-    const retryAfter = Math.max(1, quota.retry_after_seconds || 1);
-    return json(
-      {
-        error: rateLimitMessage(task, quota.reason),
-        code: 'ai_rate_limited',
-        retryAfterSeconds: retryAfter,
-      },
-      429,
-      { 'Retry-After': String(retryAfter) },
-    );
-  }
+      const quotaHeaders = {
+        'X-RateLimit-Remaining-Day': String(quota.remaining_daily),
+        'X-RateLimit-Remaining-Month': String(quota.remaining_monthly),
+      };
 
-  const quotaHeaders = {
-    'X-RateLimit-Remaining-Day': String(quota.remaining_daily),
-    'X-RateLimit-Remaining-Month': String(quota.remaining_monthly),
-  };
+      const upstream = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: MODEL,
+          messages,
+          response_format: { type: 'json_object' },
+          max_tokens: MAX_OUTPUT_TOKENS[task],
+        }),
+      });
 
-  const upstream = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: MODEL,
-      messages,
-      response_format: { type: 'json_object' },
-      max_tokens: MAX_OUTPUT_TOKENS[task],
-    }),
-  });
+      if (!upstream.ok) {
+        const detail = await upstream.text();
+        console.error(`OpenAI error ${upstream.status}: ${detail}`);
+        return json(
+          { error: 'The AI service is unavailable right now. Try again in a minute.' },
+          502,
+          quotaHeaders,
+        );
+      }
 
-  if (!upstream.ok) {
-    const detail = await upstream.text();
-    console.error(`OpenAI error ${upstream.status}: ${detail}`);
-    return json({ error: 'The AI service is unavailable right now. Try again in a minute.' }, 502, quotaHeaders);
-  }
+      const completion = await upstream.json();
+      const content = completion.choices?.[0]?.message?.content;
+      if (typeof content !== 'string') {
+        return json({ error: 'Empty AI response' }, 502, quotaHeaders);
+      }
 
-  const completion = await upstream.json();
-  const content = completion.choices?.[0]?.message?.content;
-  if (typeof content !== 'string') {
-    return json({ error: 'Empty AI response' }, 502, quotaHeaders);
-  }
-
-  try {
-    return json(
-      {
-        task,
-        result: JSON.parse(content),
-        quota: {
-          remainingDaily: quota.remaining_daily,
-          remainingMonthly: quota.remaining_monthly,
-        },
-      },
-      200,
-      quotaHeaders,
-    );
-  } catch {
-    return json({ error: 'The AI returned an unreadable response. Try again.' }, 502, quotaHeaders);
-  }
-});
+      try {
+        return json(
+          {
+            task,
+            result: JSON.parse(content),
+            quota: {
+              remainingDaily: quota.remaining_daily,
+              remainingMonthly: quota.remaining_monthly,
+            },
+          },
+          200,
+          quotaHeaders,
+        );
+      } catch {
+        return json({ error: 'The AI returned an unreadable response. Try again.' }, 502, quotaHeaders);
+      }
+    },
+  ),
+);
