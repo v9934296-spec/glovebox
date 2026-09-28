@@ -30,7 +30,7 @@ export default function LogServiceStepExtras() {
   async function attachReceipt() {
     const gate = canAttachReceipt(isPro);
     if (!gate.allowed) {
-      router.push('/paywall');
+      router.push({ pathname: '/paywall', params: { skin: 'paper' } });
       return;
     }
 

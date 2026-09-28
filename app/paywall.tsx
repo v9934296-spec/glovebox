@@ -1,9 +1,9 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { PurchasesPackage } from 'react-native-purchases';
-import { Button, Card, Screen } from '@/components/ui';
+import { GhostLink, WorkButton, paper } from '@/components/form';
+import { ShopScreen, SolidButton, TextButton } from '@/components/shop';
 import { privacyUrl, termsUrl } from '@/lib/legal';
 import { PRO_FEATURES } from '@/lib/monetization/entitlements';
 import {
@@ -11,7 +11,7 @@ import {
   presentRemotePaywall,
   useEntitlements,
 } from '@/lib/monetization/purchases';
-import { palette, radius, spacing, typography } from '@/lib/theme';
+import { palette, spacing, typography } from '@/lib/theme';
 
 const PACKAGE_LABELS: Record<string, string> = {
   $rc_monthly: 'Monthly',
@@ -40,11 +40,14 @@ function sortPackages(packages: PurchasesPackage[]): PurchasesPackage[] {
 
 export default function PaywallScreen() {
   const router = useRouter();
+  const { skin } = useLocalSearchParams<{ skin?: string }>();
+  const isPaper = skin === 'paper';
   const { status, isPro, packages, purchase, restore } = useEntitlements();
   const [busy, setBusy] = useState<string | null>(null);
   const [useFallback, setUseFallback] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const presented = useRef(false);
+  const styles = useMemo(() => (isPaper ? paperStyles : darkStyles), [isPaper]);
 
   useEffect(() => {
     if (status !== 'ready' || isPro || presented.current) return;
@@ -126,40 +129,39 @@ export default function PaywallScreen() {
 
   const showFallbackPackages = useFallback && status === 'ready' && packages.length > 0 && !isPro;
   const orderedPackages = sortPackages(packages);
+  const Shell = isPaper ? View : ShopScreen;
 
   return (
-    <Screen style={{ padding: 0 }}>
-      <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'] }}>
-        <View style={styles.hero}>
-          <Text style={styles.heroTitle}>Glovebox Pro</Text>
-          <Text style={styles.heroSubtitle}>
-            Unlimited vehicles, AI help, receipts, and PDF history.
-          </Text>
-        </View>
+    <Shell style={isPaper ? paperStyles.page : { padding: 0, flex: 1 }}>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <Text style={styles.heroTitle}>{isPaper ? 'GLOVEBOX PRO' : 'Glovebox Pro'}</Text>
+        <Text style={styles.heroSubtitle}>
+          Unlimited vehicles, AI help, receipts, and PDF history.
+        </Text>
 
-        <Card style={{ marginTop: spacing.xl }}>
+        <View style={{ marginTop: spacing.xl }}>
           {PRO_FEATURES.map((f, i) => (
-            <View key={f.title} style={[styles.featureRow, i < PRO_FEATURES.length - 1 && styles.featureBorder]}>
-              <Ionicons name="checkmark" size={18} color={palette.status.ok} />
-              <Text style={styles.featureTitle}>{f.title}</Text>
+            <View key={f.title}>
+              {i > 0 && !isPaper ? <View style={darkStyles.hair} /> : null}
+              <Text style={styles.feature}>{isPaper ? f.title.toUpperCase() : f.title}</Text>
+              {isPaper ? <Text style={paperStyles.featureDetail}>{f.detail.toUpperCase()}</Text> : null}
             </View>
           ))}
-        </Card>
+        </View>
 
         {isPro ? (
-          <Card style={{ marginTop: spacing.xl }}>
-            <View style={styles.proActiveRow}>
-              <Ionicons name="checkmark-circle" size={20} color={palette.status.ok} />
-              <Text style={styles.proActiveText}>Pro is active on this device. Enjoy!</Text>
-            </View>
-            <Button
-              title="Manage subscription"
-              variant="secondary"
-              loading={busy === 'center'}
-              onPress={() => void openCustomerCenter()}
-              style={{ marginTop: spacing.md }}
-            />
-          </Card>
+          <View style={{ marginTop: spacing.xl, gap: spacing.md }}>
+            <Text style={styles.body}>Pro is active on this device. Enjoy!</Text>
+            {isPaper ? (
+              <WorkButton
+                title={busy === 'center' ? 'Opening…' : 'Manage subscription'}
+                onPress={() => void openCustomerCenter()}
+                disabled={busy === 'center'}
+              />
+            ) : (
+              <TextButton label="Manage subscription" onPress={() => void openCustomerCenter()} />
+            )}
+          </View>
         ) : showFallbackPackages ? (
           <View style={{ marginTop: spacing.xl, gap: spacing.md }}>
             {orderedPackages.map((pkg) => {
@@ -169,151 +171,181 @@ export default function PaywallScreen() {
                   key={pkg.identifier}
                   onPress={() => setSelectedId(pkg.identifier)}
                   disabled={busy !== null}
-                  style={[styles.packageCard, selected && styles.packageCardSelected, busy !== null && { opacity: 0.5 }]}
+                  style={[styles.package, selected && styles.packageOn, busy !== null && { opacity: 0.5 }]}
                 >
                   <Text style={styles.packageLabel}>{packageLabel(pkg)}</Text>
                   <Text style={styles.packagePrice}>{pkg.product.priceString}</Text>
                 </Pressable>
               );
             })}
-            <Button
-              title="Continue"
-              disabled={selectedId == null || busy !== null}
-              loading={busy != null && busy !== 'restore'}
-              onPress={() => {
-                const pkg = orderedPackages.find((p) => p.identifier === selectedId);
-                if (pkg) void buy(pkg);
-              }}
-            />
-            <Button
-              title="Restore purchases"
-              variant="ghost"
-              loading={busy === 'restore'}
-              onPress={() => void restorePurchases()}
-            />
+            {isPaper ? (
+              <WorkButton
+                title="Continue"
+                onPress={() => {
+                  const pkg = orderedPackages.find((p) => p.identifier === selectedId);
+                  if (pkg) void buy(pkg);
+                }}
+                disabled={selectedId == null || busy !== null}
+              />
+            ) : (
+              <SolidButton
+                title="Continue"
+                disabled={selectedId == null || busy !== null}
+                onPress={() => {
+                  const pkg = orderedPackages.find((p) => p.identifier === selectedId);
+                  if (pkg) void buy(pkg);
+                }}
+              />
+            )}
+            {isPaper ? (
+              <GhostLink title="Restore purchases" onPress={() => void restorePurchases()} />
+            ) : (
+              <TextButton label="Restore purchases" tone="mute" onPress={() => void restorePurchases()} />
+            )}
             <Text style={styles.legal}>
               Subscriptions renew automatically and can be cancelled anytime in your store account settings.
             </Text>
-            <LegalLinks />
+            <LegalLinks paperSkin={isPaper} />
           </View>
         ) : status === 'loading' ? (
-          <Card style={{ marginTop: spacing.xl }}>
-            <Text style={styles.unavailableText}>Loading plans…</Text>
-          </Card>
+          <Text style={[styles.body, { marginTop: spacing.xl }]}>Loading plans…</Text>
         ) : status === 'unavailable' ? (
-          <Card style={{ marginTop: spacing.xl }}>
-            <Text style={styles.unavailableText}>
-              Purchases are not available in this build. Glovebox Pro requires the app from the App Store or Play Store.
-            </Text>
-          </Card>
+          <Text style={[styles.body, { marginTop: spacing.xl }]}>
+            Purchases are not available in this build. Glovebox Pro requires the app from the App Store or Play Store.
+          </Text>
         ) : (
           <View style={{ marginTop: spacing.xl, gap: spacing.md }}>
-            <Button
-              title="See plans"
-              loading={busy === 'paywall'}
-              onPress={() => void showRemotePaywall()}
-            />
-            <Button
-              title="Restore purchases"
-              variant="ghost"
-              loading={busy === 'restore'}
-              onPress={() => void restorePurchases()}
-            />
+            {isPaper ? (
+              <WorkButton
+                title={busy === 'paywall' ? 'Opening…' : 'See plans'}
+                onPress={() => void showRemotePaywall()}
+                disabled={busy === 'paywall'}
+              />
+            ) : (
+              <SolidButton
+                title={busy === 'paywall' ? 'Opening…' : 'See plans'}
+                onPress={() => void showRemotePaywall()}
+                disabled={busy === 'paywall'}
+              />
+            )}
+            {isPaper ? (
+              <GhostLink title="Restore purchases" onPress={() => void restorePurchases()} />
+            ) : (
+              <TextButton label="Restore purchases" tone="mute" onPress={() => void restorePurchases()} />
+            )}
             <Text style={styles.legal}>
               Subscriptions renew automatically and can be cancelled anytime in your store account settings.
             </Text>
-            <LegalLinks />
+            <LegalLinks paperSkin={isPaper} />
           </View>
         )}
-        {isPro || status === 'unavailable' || status === 'loading' ? <LegalLinks /> : null}
+        {isPro || status === 'unavailable' || status === 'loading' ? <LegalLinks paperSkin={isPaper} /> : null}
       </ScrollView>
-    </Screen>
+    </Shell>
   );
 }
 
-function LegalLinks() {
+function LegalLinks({ paperSkin }: { paperSkin: boolean }) {
   if (privacyUrl == null && termsUrl == null) return null;
+  const terms = termsUrl;
+  const privacy = privacyUrl;
+  if (paperSkin) {
+    return (
+      <View style={{ marginTop: 12, gap: 8, alignItems: 'center' }}>
+        {terms != null ? <GhostLink title="Terms of Use" onPress={() => openUrl(terms)} /> : null}
+        {privacy != null ? <GhostLink title="Privacy Policy" onPress={() => openUrl(privacy)} /> : null}
+      </View>
+    );
+  }
   return (
-    <Text style={styles.legalLinks}>
-      {termsUrl ? (
-        <Text style={styles.legalLink} onPress={() => { if (termsUrl) void Linking.openURL(termsUrl); }}>
-          Terms of Use
-        </Text>
-      ) : null}
-      {termsUrl && privacyUrl ? <Text style={styles.legal}>  ·  </Text> : null}
-      {privacyUrl ? (
-        <Text style={styles.legalLink} onPress={() => { if (privacyUrl) void Linking.openURL(privacyUrl); }}>
-          Privacy Policy
-        </Text>
-      ) : null}
-    </Text>
+    <View style={{ marginTop: 12, gap: 8, alignItems: 'center' }}>
+      {terms != null ? <TextButton label="Terms of Use" onPress={() => openUrl(terms)} /> : null}
+      {privacy != null ? <TextButton label="Privacy Policy" onPress={() => openUrl(privacy)} /> : null}
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  hero: { alignItems: 'center', marginTop: spacing.lg },
+function openUrl(url: string | null) {
+  if (url == null) return;
+  void Linking.openURL(url);
+}
+
+const darkStyles = StyleSheet.create({
+  scroll: { padding: spacing.screenPadding, paddingBottom: spacing['2xl'] },
   heroTitle: {
     color: palette.text.primary,
     fontSize: typography.display.size,
-    fontWeight: typography.display.weight,
-    lineHeight: typography.display.lineHeight,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: spacing.lg,
   },
   heroSubtitle: {
     color: palette.text.secondary,
     fontSize: typography.body.size,
-    lineHeight: typography.body.lineHeight,
     textAlign: 'center',
     marginTop: spacing.sm,
-    paddingHorizontal: spacing.xl,
   },
-  featureRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
-  featureBorder: { borderBottomWidth: 1, borderBottomColor: palette.border.subtle },
-  featureTitle: {
+  feature: {
     color: palette.text.primary,
     fontSize: typography.bodyEmphasis.size,
-    fontWeight: typography.bodyEmphasis.weight,
-    flex: 1,
+    fontWeight: '600',
+    paddingVertical: spacing.sm,
   },
-  packageCard: {
+  body: { color: palette.text.secondary, fontSize: typography.body.size },
+  package: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: palette.bg.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: palette.border.subtle,
-    padding: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: palette.border.subtle,
   },
-  packageCardSelected: {
-    backgroundColor: palette.accent.soft,
-    borderColor: palette.accent.primary,
-  },
-  packageLabel: {
-    color: palette.text.primary,
-    fontSize: typography.bodyEmphasis.size,
-    fontWeight: typography.bodyEmphasis.weight,
-  },
-  packagePrice: { color: palette.text.secondary, fontSize: typography.body.size },
-  proActiveRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  proActiveText: { color: palette.text.secondary, fontSize: typography.body.size, flex: 1 },
-  unavailableText: {
-    color: palette.text.secondary,
-    fontSize: typography.body.size,
-    lineHeight: typography.body.lineHeight,
-  },
+  packageOn: { borderBottomColor: palette.accent.primary },
+  packageLabel: { color: palette.text.primary, fontSize: typography.bodyEmphasis.size, fontWeight: '600' },
+  packagePrice: { color: palette.text.secondary },
   legal: {
     color: palette.text.tertiary,
     fontSize: typography.caption.size,
     textAlign: 'center',
-    lineHeight: typography.caption.lineHeight,
   },
-  legalLinks: {
+  hair: { height: StyleSheet.hairlineWidth, backgroundColor: palette.border.subtle },
+});
+
+const paperStyles = StyleSheet.create({
+  page: { flex: 1, backgroundColor: paper.sheet },
+  scroll: { padding: 20, paddingBottom: 40 },
+  heroTitle: {
+    color: paper.ink,
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: 1.4,
     textAlign: 'center',
-    marginTop: spacing.md,
+    marginTop: 12,
   },
-  legalLink: {
-    color: palette.accent.primary,
-    fontSize: typography.caption.size,
-    fontWeight: '600',
+  heroSubtitle: {
+    color: paper.mute,
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 8,
   },
+  feature: {
+    color: paper.ink,
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    marginTop: 14,
+  },
+  featureDetail: { color: paper.mute, fontSize: 11, fontWeight: '700', marginTop: 2 },
+  body: { color: paper.mute, fontSize: 13, fontWeight: '700' },
+  package: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderColor: paper.rule,
+    paddingVertical: 12,
+  },
+  packageOn: { backgroundColor: paper.fill },
+  packageLabel: { color: paper.ink, fontSize: 13, fontWeight: '800' },
+  packagePrice: { color: paper.ink, fontSize: 13, fontWeight: '800' },
+  legal: { color: paper.mute, fontSize: 11, textAlign: 'center' },
 });

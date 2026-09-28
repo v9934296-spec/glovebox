@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Chip, EmptyState, Field, SectionLabel } from '@/components/ui';
+import { Mute, ShopField, ShopPick, ShopScreen, SolidButton, TextButton } from '@/components/shop';
 import { useVehicles } from '@/lib/db/hooks';
 import { createReminder } from '@/lib/db/reminderRepo';
 import { serviceTypeDef, SERVICE_TYPES } from '@/lib/domain/serviceTypes';
@@ -79,9 +79,12 @@ export default function AddReminderScreen() {
 
   if (vehicles.length === 0) {
     return (
-      <View style={styles.screen}>
-        <EmptyState title="No vehicles yet" message="Add a vehicle in Garage, then set reminders." icon="car-outline" />
-      </View>
+      <ShopScreen>
+        <View style={styles.empty}>
+          <Text style={styles.emptyTitle}>No cars, no reminders</Text>
+          <TextButton label="Go to Garage" onPress={() => router.push('/garage')} />
+        </View>
+      </ShopScreen>
     );
   }
 
@@ -89,28 +92,38 @@ export default function AddReminderScreen() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
         style={styles.screen}
-        contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'], gap: spacing.xl }}
+        contentContainerStyle={styles.page}
         keyboardShouldPersistTaps="handled"
       >
         {vehicles.length > 1 && (
           <View>
-            <SectionLabel title="Vehicle" />
-            <View style={styles.chipWrap}>
+            <Mute>Vehicle</Mute>
+            <View style={styles.picks}>
               {vehicles.map((v) => (
-                <Chip key={v.id} label={v.nickname} selected={v.id === vehicleId} onPress={() => setVehicleId(v.id)} />
+                <ShopPick
+                  key={v.id}
+                  label={v.nickname}
+                  selected={v.id === vehicleId}
+                  onPress={() => setVehicleId(v.id)}
+                />
               ))}
             </View>
           </View>
         )}
 
         <View>
-          <SectionLabel title="What for" />
-          <View style={styles.chipWrap}>
+          <Mute>What for</Mute>
+          <View style={styles.picks}>
             {SERVICE_TYPES.map((t) => (
-              <Chip key={t.id} label={t.label} selected={t.id === category} onPress={() => selectCategory(t.id)} />
+              <ShopPick
+                key={t.id}
+                label={t.label}
+                selected={t.id === category}
+                onPress={() => selectCategory(t.id)}
+              />
             ))}
           </View>
-          <Field
+          <ShopField
             label="Title"
             placeholder="Oil change"
             value={title}
@@ -118,66 +131,61 @@ export default function AddReminderScreen() {
               setTitleTouched(true);
               setTitle(t);
             }}
-            containerStyle={{ marginBottom: 0, marginTop: spacing.md }}
           />
         </View>
 
         <View>
-          <SectionLabel title="Due" />
+          <Mute>Due</Mute>
           <View style={styles.twoCol}>
             <View style={{ flex: 1 }}>
-              <Field
-                label="Due date"
-                placeholder="YYYY-MM-DD"
-                value={dueDate}
-                onChangeText={setDueDate}
-                containerStyle={{ marginBottom: 0 }}
-              />
+              <ShopField label="Due date" placeholder="YYYY-MM-DD" value={dueDate} onChangeText={setDueDate} />
             </View>
             <View style={{ flex: 1 }}>
-              <Field
+              <ShopField
                 label="Due mileage"
                 placeholder={vehicle ? String(vehicle.mileage + 5000) : '85000'}
                 keyboardType="number-pad"
                 value={dueMileage}
                 onChangeText={setDueMileage}
-                containerStyle={{ marginBottom: 0 }}
               />
             </View>
           </View>
         </View>
 
         <View>
-          <SectionLabel title="Repeats" />
-          <View style={styles.chipWrap}>
+          <Mute>Repeats</Mute>
+          <View style={styles.picks}>
             {RECURRENCE_OPTIONS.map((o) => (
-              <Chip key={o.id} label={o.label} selected={recurrence === o.id} onPress={() => setRecurrence(o.id)} />
+              <ShopPick
+                key={o.id}
+                label={o.label}
+                selected={recurrence === o.id}
+                onPress={() => setRecurrence(o.id)}
+              />
             ))}
           </View>
           {(recurrence === 'date' || recurrence === 'both') && (
-            <Field
+            <ShopField
               label="Every N months"
               placeholder="6"
               keyboardType="number-pad"
               value={intervalMonths}
               onChangeText={setIntervalMonths}
-              containerStyle={{ marginBottom: recurrence === 'both' ? spacing.md : 0, marginTop: spacing.sm }}
             />
           )}
           {(recurrence === 'mileage' || recurrence === 'both') && (
-            <Field
+            <ShopField
               label="Every N miles"
               placeholder="5000"
               keyboardType="number-pad"
               value={intervalMiles}
               onChangeText={setIntervalMiles}
-              containerStyle={{ marginBottom: 0, marginTop: spacing.sm }}
             />
           )}
         </View>
 
         {error != null && <Text style={styles.error}>{error}</Text>}
-        <Button title="Create reminder" onPress={save} />
+        <SolidButton title="Create reminder" onPress={save} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -185,7 +193,10 @@ export default function AddReminderScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.bg.app },
-  chipWrap: { flexDirection: 'row', flexWrap: 'wrap' },
-  twoCol: { flexDirection: 'row', gap: spacing.md },
+  page: { padding: spacing.screenPadding, paddingBottom: spacing['2xl'], gap: spacing.xl },
+  picks: { flexDirection: 'row', flexWrap: 'wrap', marginTop: spacing.sm, marginBottom: spacing.sm },
+  twoCol: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm },
   error: { color: palette.status.overdue, fontSize: typography.caption.size },
+  empty: { flex: 1, justifyContent: 'center', padding: spacing.screenPadding, gap: spacing.lg },
+  emptyTitle: { color: palette.text.primary, fontSize: typography.hero.size, fontWeight: '600' },
 });

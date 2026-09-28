@@ -1,19 +1,18 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Field, SectionLabel } from '@/components/ui';
-import { aiAvailability, checkCost, explainRepair } from '@/lib/ai/client';
+import { BayField, BayHair, BayLink, BayPaint, BayRoom } from '@/components/bay';
 import type { CostCheck, CostVerdict, DiyDifficulty, RepairExplanation, Urgency } from '@/lib/ai/parse';
+import { aiAvailability, checkCost, explainRepair } from '@/lib/ai/client';
+import { bay } from '@/lib/bay';
 import { useVehicle } from '@/lib/db/hooks';
 import { canUseAi } from '@/lib/monetization/entitlements';
 import { useIsPro } from '@/lib/monetization/purchases';
-import { palette, radius, spacing, typography } from '@/lib/theme';
 
-const URGENCY_BADGE: Record<Urgency, { label: string; color: string }> = {
-  routine: { label: 'Routine', color: palette.status.ok },
-  soon: { label: 'Do it soon', color: palette.status.dueSoon },
-  urgent: { label: 'Urgent', color: palette.status.overdue },
+const URGENCY_LABEL: Record<Urgency, string> = {
+  routine: 'Routine',
+  soon: 'Do it soon',
+  urgent: 'Urgent',
 };
 
 const DIY_LABEL: Record<DiyDifficulty, string> = {
@@ -22,10 +21,10 @@ const DIY_LABEL: Record<DiyDifficulty, string> = {
   'pro-only': 'Leave it to a shop',
 };
 
-const VERDICT_BADGE: Record<CostVerdict, { label: string; color: string }> = {
-  low: { label: 'Below typical', color: palette.status.dueSoon },
-  fair: { label: 'Fair price', color: palette.status.ok },
-  high: { label: 'Above typical', color: palette.status.overdue },
+const VERDICT_LABEL: Record<CostVerdict, string> = {
+  low: 'Below typical',
+  fair: 'Fair price',
+  high: 'Above typical',
 };
 
 export default function AiAssistantScreen() {
@@ -42,13 +41,15 @@ export default function AiAssistantScreen() {
 
   if (!vehicle) {
     return (
-      <View style={styles.screen}>
-        <EmptyState title="Vehicle not found" message="It may have been deleted." />
-      </View>
+      <BayRoom>
+        <View style={styles.pad}>
+          <BayPaint>BAY —</BayPaint>
+          <Text style={styles.mute}>Vehicle not found. It may have been deleted.</Text>
+        </View>
+      </BayRoom>
     );
   }
 
-  /** Shared preflight for both actions; returns false when blocked. */
   function preflight(): boolean {
     const gate = canUseAi(isPro);
     if (!gate.allowed) {
@@ -100,23 +101,23 @@ export default function AiAssistantScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: bay.room }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
-        style={styles.screen}
-        contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'] }}
+        style={{ flex: 1, backgroundColor: bay.room }}
+        contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.vehicleLine}>
-          {vehicle.year} {vehicle.make} {vehicle.model} · {vehicle.mileage.toLocaleString()} mi
+        <Text style={styles.meta}>
+          {`${vehicle.year} ${vehicle.make} ${vehicle.model}  ·  ${vehicle.mileage.toLocaleString()} MI`.toUpperCase()}
         </Text>
 
-        <Field
+        <BayField
           label="Service or repair"
           placeholder='e.g. "front brake pads and rotors"'
           value={serviceLabel}
           onChangeText={setServiceLabel}
         />
-        <Field
+        <BayField
           label="Quoted price (for the price check)"
           placeholder="350"
           keyboardType="decimal-pad"
@@ -125,139 +126,88 @@ export default function AiAssistantScreen() {
         />
 
         <View style={styles.actions}>
-          <Button
-            title="Explain it"
-            variant="secondary"
-            loading={busy === 'explain'}
-            disabled={busy === 'cost'}
+          <BayLink
+            title={busy === 'explain' ? 'Explaining…' : 'Explain it'}
             onPress={() => void runExplain()}
-            style={{ flex: 1 }}
+            disabled={busy !== null}
+            tone="cream"
           />
-          <Button
-            title="Check the price"
-            loading={busy === 'cost'}
-            disabled={busy === 'explain'}
+          <BayLink
+            title={busy === 'cost' ? 'Checking…' : 'Check the price'}
             onPress={() => void runCostCheck()}
-            style={{ flex: 1 }}
+            disabled={busy !== null}
+            tone="orange"
           />
         </View>
 
         {explanation != null && (
-          <View style={{ marginTop: spacing.xl }}>
-            <SectionLabel title="What it is" />
-            <Card>
-              <View style={styles.badgeRow}>
-                <Badge {...URGENCY_BADGE[explanation.urgency]} />
-                <Badge label={DIY_LABEL[explanation.diyDifficulty]} color={palette.text.secondary} />
-              </View>
-              <Text style={styles.resultTitle}>{explanation.summary}</Text>
-              <Text style={styles.resultBody}>{explanation.whatItIs}</Text>
-              {explanation.urgencyWhy != null && <Text style={styles.resultBody}>{explanation.urgencyWhy}</Text>}
-              {explanation.questionsForShop.length > 0 && (
-                <>
-                  <Text style={styles.resultSubhead}>Ask the shop</Text>
-                  {explanation.questionsForShop.map((q) => (
-                    <Text key={q} style={styles.resultBullet}>
-                      • {q}
-                    </Text>
-                  ))}
-                </>
-              )}
-            </Card>
+          <View style={{ marginTop: 28 }}>
+            <Text style={styles.section}>WHAT IT IS</Text>
+            <Text style={styles.stamp}>
+              {URGENCY_LABEL[explanation.urgency].toUpperCase()}  ·  {DIY_LABEL[explanation.diyDifficulty].toUpperCase()}
+            </Text>
+            <Text style={styles.title}>{explanation.summary}</Text>
+            <Text style={styles.body}>{explanation.whatItIs}</Text>
+            {explanation.urgencyWhy != null && <Text style={styles.body}>{explanation.urgencyWhy}</Text>}
+            {explanation.questionsForShop.length > 0 && (
+              <>
+                <Text style={styles.section}>ASK THE SHOP</Text>
+                {explanation.questionsForShop.map((q) => (
+                  <Text key={q} style={styles.body}>
+                    {q}
+                  </Text>
+                ))}
+              </>
+            )}
           </View>
         )}
 
         {costCheck != null && (
-          <View style={{ marginTop: spacing.xl }}>
-            <SectionLabel title="Price check" />
-            <Card>
-              <View style={styles.badgeRow}>
-                <Badge {...VERDICT_BADGE[costCheck.verdict]} />
-                {costCheck.typicalLow != null && costCheck.typicalHigh != null && (
-                  <Text style={styles.rangeText}>
-                    Typical: ${Math.round(costCheck.typicalLow)}–${Math.round(costCheck.typicalHigh)}
-                  </Text>
-                )}
-              </View>
-              <Text style={styles.resultBody}>{costCheck.explanation}</Text>
-              {costCheck.tips.map((tip) => (
-                <Text key={tip} style={styles.resultBullet}>
-                  • {tip}
-                </Text>
-              ))}
-            </Card>
+          <View style={{ marginTop: 28 }}>
+            <Text style={styles.section}>PRICE CHECK</Text>
+            <Text style={styles.stamp}>{VERDICT_LABEL[costCheck.verdict].toUpperCase()}</Text>
+            {costCheck.typicalLow != null && costCheck.typicalHigh != null && (
+              <Text style={styles.body}>
+                Typical: ${Math.round(costCheck.typicalLow)}–${Math.round(costCheck.typicalHigh)}
+              </Text>
+            )}
+            <BayHair />
+            <Text style={styles.body}>{costCheck.explanation}</Text>
+            {costCheck.tips.map((tip) => (
+              <Text key={tip} style={styles.body}>
+                {tip}
+              </Text>
+            ))}
           </View>
         )}
 
         {(explanation != null || costCheck != null) && (
-          <View style={styles.disclaimer}>
-            <Ionicons name="information-circle-outline" size={14} color={palette.text.tertiary} />
-            <Text style={styles.disclaimerText}>
-              AI-generated guidance — a starting point, not a diagnosis. When in doubt, get a second opinion from a
-              trusted mechanic.
-            </Text>
-          </View>
+          <Text style={styles.disclaimer}>
+            AI-generated guidance — a starting point, not a diagnosis. When in doubt, get a second opinion from a
+            trusted mechanic.
+          </Text>
         )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-function Badge({ label, color }: { label: string; color: string }) {
-  return (
-    <View style={[styles.badge, { borderColor: color }]}>
-      <Text style={[styles.badgeText, { color }]}>{label}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: palette.bg.app },
-  vehicleLine: { color: palette.text.secondary, fontSize: typography.caption.size, marginBottom: spacing.lg },
-  actions: { flexDirection: 'row', gap: spacing.md },
-  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
-  badge: {
-    borderWidth: 1,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+  pad: { flex: 1, justifyContent: 'center', padding: 20, gap: 12 },
+  scroll: { padding: 20, paddingBottom: 40 },
+  meta: { color: bay.due, fontSize: 11, fontWeight: '800', letterSpacing: 1.1, marginBottom: 20 },
+  actions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+  section: {
+    color: bay.due,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+    marginBottom: 8,
+    marginTop: 8,
   },
-  badgeText: { fontSize: typography.caption.size, fontWeight: '600' },
-  rangeText: { color: palette.text.secondary, fontSize: typography.caption.size },
-  resultTitle: {
-    color: palette.text.primary,
-    fontSize: typography.bodyEmphasis.size,
-    fontWeight: typography.bodyEmphasis.weight,
-    marginBottom: spacing.sm,
-  },
-  resultBody: {
-    color: palette.text.secondary,
-    fontSize: typography.body.size,
-    lineHeight: typography.body.lineHeight,
-    marginBottom: spacing.sm,
-  },
-  resultSubhead: {
-    color: palette.text.primary,
-    fontSize: typography.caption.size,
-    fontWeight: '600',
-    marginTop: spacing.xs,
-    marginBottom: spacing.xs,
-  },
-  resultBullet: {
-    color: palette.text.secondary,
-    fontSize: typography.caption.size,
-    lineHeight: 20,
-  },
-  disclaimer: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    marginTop: spacing.lg,
-    paddingHorizontal: spacing.xs,
-  },
-  disclaimerText: {
-    flex: 1,
-    color: palette.text.tertiary,
-    fontSize: typography.caption.size,
-    lineHeight: typography.caption.lineHeight,
-  },
+  stamp: { color: bay.orange, fontSize: 11, fontWeight: '800', letterSpacing: 1.2, marginBottom: 8 },
+  title: { color: bay.cream, fontSize: 16, fontWeight: '800', marginBottom: 8 },
+  body: { color: bay.ymm, fontSize: 14, lineHeight: 20, marginBottom: 8 },
+  mute: { color: bay.hint, fontSize: 13, fontWeight: '700' },
+  disclaimer: { color: bay.hint, fontSize: 11, lineHeight: 16, marginTop: 24 },
 });

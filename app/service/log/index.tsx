@@ -2,7 +2,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { EmptyState, Screen } from '@/components/ui';
 import { GhostLink, WorkButton } from '@/components/form';
 import { aiAvailability, scanReceipt } from '@/lib/ai/client';
 import { isEmptyScan } from '@/lib/ai/parse';
@@ -75,7 +74,7 @@ export default function LogServiceStepWhat() {
     if (scanning) return;
     const gate = canUseAi(isPro);
     if (!gate.allowed) {
-      router.push('/paywall');
+      router.push({ pathname: '/paywall', params: { skin: 'paper' } });
       return;
     }
     const availability = aiAvailability();
@@ -104,9 +103,15 @@ export default function LogServiceStepWhat() {
 
   if (vehicles.length === 0) {
     return (
-      <Screen>
-        <EmptyState title="No vehicles yet" message="Add a car first, then write a repair order." />
-      </Screen>
+      <View style={styles.page}>
+        <View style={styles.scroll}>
+          <GhostLink title="Void" onPress={cancel} />
+          <Text style={styles.brand}>GLOVEBOX</Text>
+          <Text style={styles.doc}>REPAIR ORDER</Text>
+          <Text style={styles.ymm}>No vehicle on file</Text>
+          <Text style={styles.meta}>ADD A CAR FIRST, THEN WRITE A REPAIR ORDER.</Text>
+        </View>
+      </View>
     );
   }
 

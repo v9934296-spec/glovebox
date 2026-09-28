@@ -32,11 +32,6 @@ export function FormFrame({ children, style }: { children: React.ReactNode; styl
   return <View style={[styles.frame, style]}>{children}</View>;
 }
 
-/** Kept so garage / due / ticket tabs still compile. Same object as FormFrame. */
-export function Ticket({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
-  return <View style={[styles.ticket, style]}>{children}</View>;
-}
-
 export function BlackBar({ title }: { title: string }) {
   return (
     <View style={styles.blackBar}>
@@ -157,12 +152,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: paper.rule,
     backgroundColor: '#FFFEFA',
-  },
-  ticket: {
-    backgroundColor: '#FFFEFA',
-    borderWidth: 1.5,
-    borderColor: paper.rule,
-    padding: 16,
   },
   blackBar: {
     backgroundColor: paper.ink,

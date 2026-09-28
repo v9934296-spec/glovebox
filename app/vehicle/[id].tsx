@@ -1,19 +1,19 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import {
-  Button,
-  Card,
-  DetailRow,
-  EmptyState,
-  HealthRing,
-  MetricStrip,
-  ReminderListRow,
-  Screen,
-  SectionLabel,
-  SegmentedControl,
-} from '@/components/ui';
+  BayButton,
+  BayHair,
+  BayLink,
+  BayPaint,
+  BayPick,
+  BayRoom,
+  BayRow,
+  BayScore,
+  HangTag,
+  Slats,
+} from '@/components/bay';
+import { bay } from '@/lib/bay';
 import { useReminders, useServiceRecords, useVehicle } from '@/lib/db/hooks';
 import { completeReminder, deleteReminder } from '@/lib/db/reminderRepo';
 import { deleteServiceRecord } from '@/lib/db/serviceRepo';
@@ -26,7 +26,6 @@ import { decodedVinSummary, recallStatus } from '@/lib/domain/vin';
 import { canExportReport } from '@/lib/monetization/entitlements';
 import { useIsPro } from '@/lib/monetization/purchases';
 import { shareVehicleReport } from '@/lib/report/export';
-import { palette, radius, spacing, typography } from '@/lib/theme';
 import { VinServiceError, checkRecalls, decodeVin, vinAvailability } from '@/lib/vin/client';
 import { vinDecodeFailureMessage } from '@/lib/vin/errors';
 import {
@@ -37,7 +36,12 @@ import {
 } from '@/lib/vin/recallCheck';
 
 type Tab = 'overview' | 'maintenance' | 'expenses' | 'reminders';
-const BLOCK = spacing.section;
+const TABS: { value: Tab; label: string }[] = [
+  { value: 'overview', label: 'Overview' },
+  { value: 'maintenance', label: 'Maintenance' },
+  { value: 'expenses', label: 'Expenses' },
+  { value: 'reminders', label: 'Reminders' },
+];
 
 export default function VehicleDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -54,9 +58,12 @@ export default function VehicleDetailScreen() {
 
   if (!vehicle) {
     return (
-      <Screen>
-        <EmptyState title="Vehicle not found" message="It may have been deleted." />
-      </Screen>
+      <BayRoom>
+        <View style={styles.pad}>
+          <BayPaint>BAY —</BayPaint>
+          <Text style={styles.mute}>Vehicle not found. It may have been deleted.</Text>
+        </View>
+      </BayRoom>
     );
   }
 
@@ -175,396 +182,340 @@ export default function VehicleDetailScreen() {
     ]);
   }
 
+  const recallValue =
+    recallState === 'unknown'
+      ? 'Not checked yet'
+      : recallState === 'none'
+        ? `No recalls found · ${vehicle.recallCheckedAt?.slice(0, 10) ?? today}`
+        : `${vehicle.recalls.length} found`;
+
   return (
-    <Screen style={{ padding: 0 }}>
+    <BayRoom>
       <Stack.Screen options={{ title: vehicle.nickname }} />
-      <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'] }}>
-        <View style={styles.header}>
-          {vehicle.photoUri ? (
-            <Image source={{ uri: vehicle.photoUri }} style={styles.headerPhoto} />
-          ) : (
-            <View style={[styles.headerPhoto, styles.headerPhotoPlaceholder]}>
-              <Ionicons name="car-sport" size={28} color={palette.text.tertiary} />
-            </View>
-          )}
-          <View style={styles.headerIdentity}>
-            <Text style={styles.headerTitle} numberOfLines={2}>
-              {ymm}
-            </Text>
-            <Pressable onPress={() => setMileageDraft(String(vehicle.mileage))}>
-              {mileageDraft == null ? (
-                <Text style={styles.mileage}>
-                  {vehicle.mileage.toLocaleString()} mi <Text style={styles.mileageEdit}>edit</Text>
-                </Text>
-              ) : (
-                <TextInput
-                  style={styles.mileageInput}
-                  value={mileageDraft}
-                  onChangeText={setMileageDraft}
-                  keyboardType="number-pad"
-                  autoFocus
-                  onBlur={commitMileage}
-                  onSubmitEditing={commitMileage}
-                />
-              )}
-            </Pressable>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        {vehicle.photoUri ? (
+          <Image source={{ uri: vehicle.photoUri }} style={styles.hero} />
+        ) : (
+          <View style={styles.heroFallback}>
+            <Slats count={6} />
+            <Text style={styles.heroYmm}>{ymm.toUpperCase()}</Text>
           </View>
-          <HealthRing score={health.score} size={48} />
+        )}
+
+        <View style={styles.tagWrap}>
+          <HangTag name={vehicle.nickname} miles={`${vehicle.mileage.toLocaleString()} MI`} />
         </View>
 
-        <View style={styles.segmentWrap}>
-          <SegmentedControl
-            options={[
-              { value: 'overview', label: 'Overview' },
-              { value: 'maintenance', label: 'Maintenance' },
-              { value: 'expenses', label: 'Expenses' },
-              { value: 'reminders', label: 'Reminders' },
-            ]}
-            value={tab}
-            onChange={(v) => setTab(v as Tab)}
-          />
+        <View style={styles.floor}>
+          <BayPaint>{ymm.toUpperCase()}</BayPaint>
+          <BayScore score={health.score} />
+        </View>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Edit mileage"
+          onPress={() => setMileageDraft(String(vehicle.mileage))}
+          style={styles.odo}
+        >
+          {mileageDraft == null ? (
+            <Text style={styles.odoText}>
+              ODO {vehicle.mileage.toLocaleString()} MI  ·  EDIT
+            </Text>
+          ) : (
+            <TextInput
+              style={styles.odoInput}
+              value={mileageDraft}
+              onChangeText={setMileageDraft}
+              keyboardType="number-pad"
+              autoFocus
+              onBlur={commitMileage}
+              onSubmitEditing={commitMileage}
+            />
+          )}
+        </Pressable>
+
+        <View style={styles.tabs}>
+          {TABS.map((t) => (
+            <BayPick key={t.value} label={t.label} selected={tab === t.value} onPress={() => setTab(t.value)} />
+          ))}
         </View>
 
         {tab === 'overview' && (
-          <View style={{ gap: BLOCK }}>
-            <MetricStrip
-              items={[
-                { label: 'This year', value: formatMoney(expenses.yearTotal) },
-                { label: 'Lifetime', value: formatMoney(expenses.lifetimeTotal) },
-                {
-                  label: 'Cost / mile',
-                  value: expenses.costPerMile != null ? `$${expenses.costPerMile.toFixed(2)}` : '—',
-                },
-              ]}
+          <View style={styles.block}>
+            <BayRow label="This year" value={formatMoney(expenses.yearTotal)} />
+            <BayHair />
+            <BayRow label="Lifetime" value={formatMoney(expenses.lifetimeTotal)} />
+            <BayHair />
+            <BayRow
+              label="Cost / mile"
+              value={expenses.costPerMile != null ? `$${expenses.costPerMile.toFixed(2)}` : '—'}
             />
 
             {health.reasons.length > 0 && (
-              <Card>
-                <Text style={styles.cardTitle}>Health notes</Text>
+              <View style={{ marginTop: 20 }}>
+                <Text style={styles.section}>HEALTH NOTES</Text>
                 {health.reasons.map((reason) => (
-                  <Text key={reason} style={styles.reasonText}>
-                    • {reason}
+                  <Text key={reason} style={styles.body}>
+                    {reason.toUpperCase()}
                   </Text>
                 ))}
-              </Card>
+              </View>
             )}
 
-            <View>
-              <SectionLabel title="Details" />
-              <Card>
-                <DetailRow label="License plate" value={vehicle.licensePlate ?? '—'} />
-                <DetailRow label="VIN" value={vehicle.vin ?? '—'} />
-                <DetailRow label="Purchased" value={vehicle.purchaseDate ?? '—'} />
-                <DetailRow
-                  label="Purchase price"
-                  value={vehicle.purchasePrice != null ? formatMoney(vehicle.purchasePrice) : '—'}
-                  last
-                />
-              </Card>
-            </View>
+            <Text style={styles.section}>DETAILS</Text>
+            <BayRow label="License plate" value={vehicle.licensePlate ?? '—'} />
+            <BayHair />
+            <BayRow label="VIN" value={vehicle.vin ?? '—'} />
+            <BayHair />
+            <BayRow label="Purchased" value={vehicle.purchaseDate ?? '—'} />
+            <BayHair />
+            <BayRow
+              label="Purchase price"
+              value={vehicle.purchasePrice != null ? formatMoney(vehicle.purchasePrice) : '—'}
+            />
 
-            <View>
-              <SectionLabel title="VIN & recalls" />
-              <Card>
-                {decodedSummary != null && <DetailRow label="Decoded" value={decodedSummary} />}
-                <DetailRow
-                  label="Recalls"
-                  value={
-                    recallState === 'unknown'
-                      ? 'Not checked yet'
-                      : recallState === 'none'
-                        ? `No recalls found · ${vehicle.recallCheckedAt?.slice(0, 10) ?? today}`
-                        : `${vehicle.recalls.length} found`
-                  }
-                  last={recallState !== 'open'}
-                />
-                {recallState === 'open' &&
-                  vehicle.recalls.map((r, i) => (
-                    <View
-                      key={r.id}
-                      style={[styles.recallItem, i === vehicle.recalls.length - 1 && { borderBottomWidth: 0 }]}
-                    >
-                      <Text style={styles.recallComponent}>{r.component ?? 'Recall'}</Text>
-                      {r.summary != null && <Text style={styles.recordNotes}>{r.summary}</Text>}
-                    </View>
-                  ))}
-              </Card>
-            </View>
+            <Text style={styles.section}>VIN & RECALLS</Text>
+            {decodedSummary != null && (
+              <>
+                <BayRow label="Decoded" value={decodedSummary} />
+                <BayHair />
+              </>
+            )}
+            <BayRow label="Recalls" value={recallValue} />
+            {recallState === 'open' &&
+              vehicle.recalls.map((r) => (
+                <View key={r.id} style={{ paddingVertical: 8 }}>
+                  <Text style={styles.recall}>{((r.component ?? 'Recall') as string).toUpperCase()}</Text>
+                  {r.summary != null && <Text style={styles.body}>{r.summary}</Text>}
+                </View>
+              ))}
 
-            <View style={{ gap: spacing.md }}>
-              <View style={styles.rowActions}>
-                <Button
-                  title="Decode VIN"
-                  variant="secondary"
-                  loading={decoding}
-                  disabled={!vehicle.vin}
-                  onPress={() => void onDecodeVin()}
-                  style={{ flex: 1 }}
-                />
-                <Button
-                  title="Check recalls"
-                  variant="secondary"
-                  loading={checkingRecalls}
-                  onPress={() => void onCheckRecalls()}
-                  style={{ flex: 1 }}
-                />
-              </View>
-              <Button title="Export PDF" variant="secondary" loading={exporting} onPress={() => void exportReport()} />
-              <Button
+            <View style={styles.actions}>
+              <BayLink
+                title={decoding ? 'Decoding…' : 'Decode VIN'}
+                onPress={() => void onDecodeVin()}
+                disabled={!vehicle.vin || decoding}
+                tone="cream"
+              />
+              <BayLink
+                title={checkingRecalls ? 'Checking…' : 'Check recalls'}
+                onPress={() => void onCheckRecalls()}
+                disabled={checkingRecalls}
+                tone="cream"
+              />
+              <BayLink
+                title={exporting ? 'Exporting…' : 'Export PDF'}
+                onPress={() => void exportReport()}
+                disabled={exporting}
+                tone="cream"
+              />
+              <BayLink
                 title="Ask AI"
-                variant="secondary"
                 onPress={() => router.push({ pathname: '/ai/assistant', params: { vehicleId: vehicle.id } })}
+                tone="cream"
               />
-              <Button
-                title="Delete vehicle"
-                variant="danger"
-                onPress={confirmDeleteVehicle}
-                style={{ marginTop: spacing.lg }}
-              />
+              <BayLink title="Delete vehicle" onPress={confirmDeleteVehicle} tone="danger" />
             </View>
           </View>
         )}
 
         {tab === 'maintenance' && (
-          <View style={{ gap: BLOCK }}>
-            <Button
+          <View style={styles.block}>
+            <BayButton
               title="Log service"
               onPress={() => router.push({ pathname: '/service/log', params: { vehicleId: vehicle.id } })}
             />
             {records.length === 0 ? (
-              <EmptyState
-                title="No service history"
-                message="Log an oil change, repair, or registration to build history."
-                icon="construct-outline"
-              />
+              <Text style={styles.mute}>No service history. Log an oil change, repair, or registration.</Text>
             ) : (
-              <Card style={styles.listCard}>
-                {records.map((r, i) => (
-                  <View key={r.id} style={[styles.serviceRow, i < records.length - 1 && styles.serviceRowSep]}>
-                    <View style={styles.serviceRowTop}>
-                      <Text style={styles.serviceTitle} numberOfLines={1}>
-                        {serviceTypeLabel(r.serviceType)}
+              records.map((r, i) => (
+                <View key={r.id}>
+                  {i > 0 ? <BayHair /> : null}
+                  <View style={styles.line}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.lineTitle}>{serviceTypeLabel(r.serviceType).toUpperCase()}</Text>
+                      <Text style={styles.body}>
+                        {[
+                          r.date,
+                          r.mileage != null ? `${r.mileage.toLocaleString()} mi` : null,
+                          r.shopName,
+                        ]
+                          .filter(Boolean)
+                          .join('  ·  ')}
                       </Text>
-                      {r.cost != null && <Text style={styles.serviceCost}>{formatMoney(r.cost)}</Text>}
+                      {(r.nextDueDate || r.nextDueMileage != null) && (
+                        <Text style={styles.body}>
+                          Next due:{' '}
+                          {dueSummary({
+                            dueDate: r.nextDueDate,
+                            dueMileage: r.nextDueMileage,
+                            currentMileage: vehicle.mileage,
+                            today,
+                          })}
+                        </Text>
+                      )}
                     </View>
-                    <Text style={styles.serviceMeta} numberOfLines={1}>
-                      {[
-                        r.date,
-                        r.mileage != null ? `${r.mileage.toLocaleString()} mi` : null,
-                        r.shopName,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </Text>
-                    {(r.nextDueDate || r.nextDueMileage != null) && (
-                      <Text style={styles.serviceNext}>
-                        Next due:{' '}
-                        {dueSummary({
-                          dueDate: r.nextDueDate,
-                          dueMileage: r.nextDueMileage,
-                          currentMileage: vehicle.mileage,
-                          today,
-                        })}
-                      </Text>
-                    )}
-                    <View style={styles.serviceIcons}>
-                      <Pressable
-                        onPress={() =>
-                          router.push({
-                            pathname: '/ai/assistant',
-                            params: {
-                              vehicleId: vehicle.id,
-                              serviceLabel: serviceTypeLabel(r.serviceType),
-                              ...(r.cost != null ? { cost: String(r.cost) } : {}),
-                            },
-                          })
-                        }
-                        hitSlop={8}
-                      >
-                        <Ionicons name="sparkles-outline" size={18} color={palette.text.tertiary} />
-                      </Pressable>
-                      <Pressable
-                        onPress={() =>
-                          Alert.alert('Delete record', 'Remove this service record?', [
-                            { text: 'Cancel', style: 'cancel' },
-                            { text: 'Delete', style: 'destructive', onPress: () => deleteServiceRecord(r.id) },
-                          ])
-                        }
-                        hitSlop={8}
-                      >
-                        <Ionicons name="trash-outline" size={18} color={palette.text.tertiary} />
-                      </Pressable>
-                    </View>
+                    {r.cost != null && <Text style={styles.lineAmt}>{formatMoney(r.cost)}</Text>}
                   </View>
-                ))}
-              </Card>
+                  <View style={styles.lineLinks}>
+                    <BayLink
+                      title="AI"
+                      tone="mute"
+                      onPress={() =>
+                        router.push({
+                          pathname: '/ai/assistant',
+                          params: {
+                            vehicleId: vehicle.id,
+                            serviceLabel: serviceTypeLabel(r.serviceType),
+                            ...(r.cost != null ? { cost: String(r.cost) } : {}),
+                          },
+                        })
+                      }
+                    />
+                    <BayLink
+                      title="Delete"
+                      tone="mute"
+                      onPress={() =>
+                        Alert.alert('Delete record', 'Remove this service record?', [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Delete', style: 'destructive', onPress: () => deleteServiceRecord(r.id) },
+                        ])
+                      }
+                    />
+                  </View>
+                </View>
+              ))
             )}
           </View>
         )}
 
         {tab === 'expenses' && (
-          <View style={{ gap: BLOCK }}>
-            <MetricStrip
-              items={[
-                { label: 'This month', value: formatMoney(expenses.monthTotal) },
-                { label: 'This year', value: formatMoney(expenses.yearTotal) },
-              ]}
-            />
-            <MetricStrip
-              items={[
-                { label: 'Maintenance', value: formatMoney(expenses.maintenanceTotal) },
-                { label: 'Repairs', value: formatMoney(expenses.repairTotal) },
-                { label: 'Admin', value: formatMoney(expenses.adminTotal) },
-              ]}
-            />
-            <View>
-              <SectionLabel title="By category" />
-              {expenses.byCategory.length === 0 ? (
-                <EmptyState
-                  title="No expenses yet"
-                  message="Costs from service records show up here."
-                  icon={null}
-                />
-              ) : (
-                <Card>
-                  {expenses.byCategory.map((c, i) => (
-                    <DetailRow
-                      key={c.serviceType}
-                      label={serviceTypeLabel(c.serviceType)}
-                      value={formatMoney(c.total)}
-                      last={i === expenses.byCategory.length - 1}
-                    />
-                  ))}
-                </Card>
-              )}
-            </View>
+          <View style={styles.block}>
+            <BayRow label="This month" value={formatMoney(expenses.monthTotal)} />
+            <BayHair />
+            <BayRow label="This year" value={formatMoney(expenses.yearTotal)} />
+            <BayHair />
+            <BayRow label="Maintenance" value={formatMoney(expenses.maintenanceTotal)} />
+            <BayHair />
+            <BayRow label="Repairs" value={formatMoney(expenses.repairTotal)} />
+            <BayHair />
+            <BayRow label="Admin" value={formatMoney(expenses.adminTotal)} />
+            <Text style={styles.section}>BY CATEGORY</Text>
+            {expenses.byCategory.length === 0 ? (
+              <Text style={styles.mute}>No expenses yet. Costs from service records show up here.</Text>
+            ) : (
+              expenses.byCategory.map((c, i) => (
+                <View key={c.serviceType}>
+                  {i > 0 ? <BayHair /> : null}
+                  <BayRow label={serviceTypeLabel(c.serviceType)} value={formatMoney(c.total)} />
+                </View>
+              ))
+            )}
           </View>
         )}
 
         {tab === 'reminders' && (
-          <View style={{ gap: BLOCK }}>
-            <Button
+          <View style={styles.block}>
+            <BayButton
               title="New reminder"
               onPress={() => router.push({ pathname: '/reminder/add', params: { vehicleId: vehicle.id } })}
             />
             {reminders.length === 0 ? (
-              <EmptyState
-                title="Nothing scheduled"
-                message="Oil, registration, insurance — anything on a schedule."
-                icon="notifications-outline"
-              />
+              <Text style={styles.mute}>Nothing scheduled. Oil, registration, insurance — anything on a date.</Text>
             ) : (
-              <Card style={styles.listCard}>
-                {reminders.map((r, i) => {
-                  const state = reminderDueState(r, vehicle.mileage, today);
-                  return (
-                    <ReminderListRow
-                      key={r.id}
-                      title={r.title}
-                      meta={`${dueSummary({
-                        dueDate: r.dueDate,
-                        dueMileage: r.dueMileage,
-                        currentMileage: vehicle.mileage,
-                        today,
-                      })}${r.recurrenceType !== 'none' ? ' · recurring' : ''}`}
-                      state={state === 'no_due' ? 'upcoming' : state}
-                      showSeparator={i < reminders.length - 1}
-                      onDone={() => completeReminder(r, vehicle.mileage)}
-                      onPress={() =>
-                        Alert.alert('Delete reminder', `Delete "${r.title}"?`, [
-                          { text: 'Cancel', style: 'cancel' },
-                          { text: 'Delete', style: 'destructive', onPress: () => deleteReminder(r.id) },
-                        ])
-                      }
-                    />
-                  );
-                })}
-              </Card>
+              reminders.map((r, i) => {
+                const state = reminderDueState(r, vehicle.mileage, today);
+                return (
+                  <View key={r.id}>
+                    {i > 0 ? <BayHair /> : null}
+                    <View style={styles.line}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.lineTitle}>{r.title.toUpperCase()}</Text>
+                        <Text style={styles.body}>
+                          {dueSummary({
+                            dueDate: r.dueDate,
+                            dueMileage: r.dueMileage,
+                            currentMileage: vehicle.mileage,
+                            today,
+                          })}
+                          {r.recurrenceType !== 'none' ? '  ·  recurring' : ''}
+                          {state !== 'no_due' ? `  ·  ${state.replace('_', ' ')}` : ''}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.lineLinks}>
+                      <BayLink title="Done" tone="mute" onPress={() => completeReminder(r, vehicle.mileage)} />
+                      <BayLink
+                        title="Delete"
+                        tone="mute"
+                        onPress={() =>
+                          Alert.alert('Delete reminder', `Delete "${r.title}"?`, [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Delete', style: 'destructive', onPress: () => deleteReminder(r.id) },
+                          ])
+                        }
+                      />
+                    </View>
+                  </View>
+                );
+              })
             )}
           </View>
         )}
       </ScrollView>
-    </Screen>
+    </BayRoom>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
+  pad: { flex: 1, justifyContent: 'center', padding: 20, gap: 12 },
+  scroll: { paddingBottom: 40 },
+  hero: { width: '100%', height: 220 },
+  heroFallback: { height: 180, backgroundColor: bay.fallback, justifyContent: 'flex-end' },
+  heroYmm: {
+    color: bay.ymm,
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+    textAlign: 'center',
+    paddingVertical: 16,
+  },
+  tagWrap: { position: 'absolute', right: 16, top: 160 },
+  floor: {
+    paddingHorizontal: 18,
+    paddingTop: 16,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    gap: 12,
   },
-  headerPhoto: {
-    width: 72,
-    height: 72,
-    borderRadius: radius.md,
-  },
-  headerPhotoPlaceholder: {
-    backgroundColor: palette.bg.hero,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerIdentity: { flex: 1, minWidth: 0, gap: 4 },
-  headerTitle: {
-    color: palette.text.primary,
-    fontSize: typography.h3.size,
-    fontWeight: typography.h3.weight,
-    lineHeight: typography.h3.lineHeight,
-  },
-  mileage: { color: palette.text.secondary, fontSize: typography.caption.size },
-  mileageEdit: { color: palette.accent.primary, fontSize: typography.caption.size },
-  mileageInput: {
-    color: palette.text.primary,
+  odo: { paddingHorizontal: 18, paddingTop: 8 },
+  odoText: { color: bay.due, fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
+  odoInput: {
+    color: bay.cream,
     borderBottomWidth: 1,
-    borderBottomColor: palette.accent.primary,
-    fontSize: typography.body.size,
+    borderBottomColor: bay.orange,
+    fontSize: 16,
+    fontWeight: '700',
     paddingVertical: 2,
     minWidth: 90,
   },
-  segmentWrap: { marginVertical: spacing.lg },
-  cardTitle: {
-    color: palette.text.primary,
-    fontSize: typography.bodyEmphasis.size,
-    fontWeight: typography.bodyEmphasis.weight,
-    marginBottom: spacing.sm,
+  tabs: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 18, paddingTop: 16 },
+  block: { paddingHorizontal: 18, paddingTop: 12, gap: 4 },
+  section: {
+    color: bay.due,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+    marginTop: 22,
+    marginBottom: 6,
   },
-  reasonText: { color: palette.text.secondary, fontSize: typography.caption.size, lineHeight: 20 },
-  recallItem: {
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: palette.border.subtle,
-  },
-  recallComponent: {
-    color: palette.status.overdue,
-    fontSize: typography.bodyEmphasis.size,
-    fontWeight: typography.bodyEmphasis.weight,
-  },
-  recordNotes: { color: palette.text.secondary, fontSize: typography.caption.size, marginTop: spacing.xs },
-  rowActions: { flexDirection: 'row', gap: spacing.md },
-  listCard: {
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-  },
-  serviceRow: { paddingVertical: spacing.md },
-  serviceRowSep: { borderBottomWidth: 1, borderBottomColor: palette.border.subtle },
-  serviceRowTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  serviceTitle: {
-    flex: 1,
-    color: palette.text.primary,
-    fontSize: typography.bodyEmphasis.size,
-    fontWeight: typography.bodyEmphasis.weight,
-  },
-  serviceCost: {
-    color: palette.text.primary,
-    fontSize: typography.bodyEmphasis.size,
-    fontWeight: '600',
-  },
-  serviceMeta: { color: palette.text.tertiary, fontSize: typography.caption.size, marginTop: 2 },
-  serviceNext: { color: palette.text.secondary, fontSize: typography.caption.size, marginTop: 4 },
-  serviceIcons: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.md,
-    marginTop: spacing.sm,
-  },
+  body: { color: bay.ymm, fontSize: 12, marginTop: 2 },
+  mute: { color: bay.hint, fontSize: 13, fontWeight: '700', letterSpacing: 0.4, marginTop: 16 },
+  recall: { color: bay.orange, fontSize: 13, fontWeight: '800' },
+  actions: { marginTop: 24, gap: 14 },
+  line: { flexDirection: 'row', gap: 12, paddingVertical: 12 },
+  lineTitle: { color: bay.cream, fontSize: 14, fontWeight: '800', letterSpacing: 0.4 },
+  lineAmt: { color: bay.cream, fontSize: 14, fontWeight: '800' },
+  lineLinks: { flexDirection: 'row', gap: 18, paddingBottom: 8 },
 });

@@ -2,14 +2,14 @@ import { Stack, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Field, PhotoTile, Screen, SectionLabel } from '@/components/ui';
+import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { BayButton, BayField, BayLink, BayPaint, BayRoom, Slats } from '@/components/bay';
+import { bay } from '@/lib/bay';
 import { useVehicles } from '@/lib/db/hooks';
 import { createVehicle } from '@/lib/db/vehicleRepo';
 import { validateVin } from '@/lib/domain/vin';
 import { canAddVehicle } from '@/lib/monetization/entitlements';
 import { useIsPro } from '@/lib/monetization/purchases';
-import { palette, spacing, typography } from '@/lib/theme';
 
 type FormValues = {
   nickname: string;
@@ -25,8 +25,6 @@ type FormValues = {
 };
 
 const CURRENT_YEAR = new Date().getFullYear();
-const fieldGap = { marginBottom: spacing.md } as const;
-const fieldLast = { marginBottom: 0 } as const;
 
 export default function AddVehicleScreen() {
   const router = useRouter();
@@ -63,8 +61,6 @@ export default function AddVehicleScreen() {
   const onSubmit = handleSubmit((values) => {
     const vinInput = values.vin.trim();
     const vinCheck = vinInput ? validateVin(vinInput) : null;
-    // Normalize a well-formed VIN; otherwise keep the raw entry (rare — react-hook-form
-    // already blocks submit on a validation error) rather than silently dropping it.
     const vin = vinCheck?.valid ? vinCheck.vin : vinInput || null;
     createVehicle({
       nickname: values.nickname.trim(),
@@ -88,232 +84,235 @@ export default function AddVehicleScreen() {
 
   if (!gate.allowed) {
     return (
-      <Screen>
-        <EmptyState
-          title="Garage is full"
-          message={gate.reason}
-          icon="car-outline"
-          action={<Button title="See Pro" onPress={() => router.push('/paywall')} />}
-        />
-      </Screen>
+      <BayRoom>
+        <View style={styles.pad}>
+          <BayPaint>BAY FULL</BayPaint>
+          <Text style={styles.hint}>{gate.reason.toUpperCase()}</Text>
+          <BayLink title="See Pro" onPress={() => router.push('/paywall')} />
+        </View>
+      </BayRoom>
     );
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: palette.bg.app }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: bay.room }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: 'Add vehicle' }} />
       <ScrollView
-        style={{ flex: 1, backgroundColor: palette.bg.app }}
-        contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing['2xl'], gap: spacing.xl }}
+        style={{ flex: 1, backgroundColor: bay.room }}
+        contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        <PhotoTile uri={photoUri} emptyLabel="Add photo" emptyIcon="car-outline" onPress={() => void pickPhoto()} height={160} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Add photo" onPress={() => void pickPhoto()}>
+          {photoUri ? (
+            <Image source={{ uri: photoUri }} style={styles.photo} />
+          ) : (
+            <View style={styles.photoEmpty}>
+              <Slats count={5} />
+              <Text style={styles.photoHint}>PULL A PHOTO IN</Text>
+            </View>
+          )}
+        </Pressable>
 
-        <View>
-          <SectionLabel title="Vehicle" />
-          <Card>
+        <Text style={styles.section}>VEHICLE</Text>
+        <Controller
+          control={control}
+          name="nickname"
+          rules={{ required: 'Give your vehicle a name' }}
+          render={({ field, fieldState }) => (
+            <>
+              <BayField
+                label="Nickname"
+                placeholder="Daily driver"
+                value={field.value}
+                onChangeText={field.onChange}
+              />
+              {fieldState.error?.message ? <Text style={styles.err}>{fieldState.error.message}</Text> : null}
+            </>
+          )}
+        />
+        <View style={styles.twoCol}>
+          <View style={{ flex: 1 }}>
             <Controller
               control={control}
-              name="nickname"
-              rules={{ required: 'Give your vehicle a name' }}
+              name="make"
+              rules={{ required: 'Required' }}
               render={({ field, fieldState }) => (
-                <Field
-                  label="Nickname"
-                  placeholder="e.g. Daily driver"
-                  value={field.value}
-                  onChangeText={field.onChange}
-                  error={fieldState.error?.message}
-                  containerStyle={fieldGap}
-                />
+                <>
+                  <BayField label="Make" placeholder="Honda" value={field.value} onChangeText={field.onChange} />
+                  {fieldState.error?.message ? <Text style={styles.err}>{fieldState.error.message}</Text> : null}
+                </>
               )}
             />
-            <View style={styles.twoCol}>
-              <View style={{ flex: 1 }}>
-                <Controller
-                  control={control}
-                  name="make"
-                  rules={{ required: 'Required' }}
-                  render={({ field, fieldState }) => (
-                    <Field
-                      label="Make"
-                      placeholder="Honda"
-                      value={field.value}
-                      onChangeText={field.onChange}
-                      error={fieldState.error?.message}
-                      containerStyle={fieldGap}
-                    />
-                  )}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Controller
-                  control={control}
-                  name="model"
-                  rules={{ required: 'Required' }}
-                  render={({ field, fieldState }) => (
-                    <Field
-                      label="Model"
-                      placeholder="Civic"
-                      value={field.value}
-                      onChangeText={field.onChange}
-                      error={fieldState.error?.message}
-                      containerStyle={fieldGap}
-                    />
-                  )}
-                />
-              </View>
-            </View>
-            <View style={styles.twoCol}>
-              <View style={{ flex: 1 }}>
-                <Controller
-                  control={control}
-                  name="year"
-                  rules={{
-                    required: 'Required',
-                    validate: (v) => {
-                      const n = Number(v);
-                      return (n >= 1900 && n <= CURRENT_YEAR + 1) || 'Invalid year';
-                    },
-                  }}
-                  render={({ field, fieldState }) => (
-                    <Field
-                      label="Year"
-                      placeholder="2015"
-                      keyboardType="number-pad"
-                      value={field.value}
-                      onChangeText={field.onChange}
-                      error={fieldState.error?.message}
-                      containerStyle={fieldGap}
-                    />
-                  )}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Controller
-                  control={control}
-                  name="trim"
-                  render={({ field }) => (
-                    <Field
-                      label="Trim"
-                      placeholder="EX-L"
-                      value={field.value}
-                      onChangeText={field.onChange}
-                      containerStyle={fieldGap}
-                    />
-                  )}
-                />
-              </View>
-            </View>
+          </View>
+          <View style={{ flex: 1 }}>
             <Controller
               control={control}
-              name="mileage"
-              rules={{ required: 'Current mileage is required' }}
+              name="model"
+              rules={{ required: 'Required' }}
               render={({ field, fieldState }) => (
-                <Field
-                  label="Mileage"
-                  placeholder="82000"
-                  keyboardType="number-pad"
-                  value={field.value}
-                  onChangeText={field.onChange}
-                  error={fieldState.error?.message}
-                  containerStyle={fieldLast}
-                />
+                <>
+                  <BayField label="Model" placeholder="Civic" value={field.value} onChangeText={field.onChange} />
+                  {fieldState.error?.message ? <Text style={styles.err}>{fieldState.error.message}</Text> : null}
+                </>
               )}
             />
-          </Card>
+          </View>
         </View>
-
-        <View>
-          <SectionLabel title="Identifiers" />
-          <Card>
+        <View style={styles.twoCol}>
+          <View style={{ flex: 1 }}>
             <Controller
               control={control}
-              name="licensePlate"
-              render={({ field }) => (
-                <Field
-                  label="License plate"
-                  placeholder="7ABC123"
-                  autoCapitalize="characters"
-                  value={field.value}
-                  onChangeText={field.onChange}
-                  containerStyle={fieldGap}
-                />
-              )}
-            />
-            <Controller
-              control={control}
-              name="vin"
+              name="year"
               rules={{
+                required: 'Required',
                 validate: (v) => {
-                  if (!v.trim()) return true;
-                  const check = validateVin(v);
-                  return check.valid || check.reason;
+                  const n = Number(v);
+                  return (n >= 1900 && n <= CURRENT_YEAR + 1) || 'Invalid year';
                 },
               }}
               render={({ field, fieldState }) => (
-                <Field
-                  label="VIN"
-                  placeholder="17 characters"
-                  autoCapitalize="characters"
-                  value={field.value}
-                  onChangeText={field.onChange}
-                  error={fieldState.error?.message}
-                  containerStyle={fieldLast}
-                />
+                <>
+                  <BayField
+                    label="Year"
+                    placeholder="2015"
+                    keyboardType="number-pad"
+                    value={field.value}
+                    onChangeText={field.onChange}
+                  />
+                  {fieldState.error?.message ? <Text style={styles.err}>{fieldState.error.message}</Text> : null}
+                </>
               )}
             />
-            <Text style={styles.vinHint}>We'll decode make/model when possible</Text>
-          </Card>
-        </View>
-
-        <View>
-          <SectionLabel title="Optional" />
-          <Card>
+          </View>
+          <View style={{ flex: 1 }}>
             <Controller
               control={control}
-              name="purchaseDate"
-              rules={{
-                validate: (v) => !v || /^\d{4}-\d{2}-\d{2}$/.test(v) || 'Use YYYY-MM-DD',
-              }}
-              render={({ field, fieldState }) => (
-                <Field
-                  label="Purchase date"
-                  placeholder="YYYY-MM-DD"
-                  value={field.value}
-                  onChangeText={field.onChange}
-                  error={fieldState.error?.message}
-                  containerStyle={fieldGap}
-                />
-              )}
-            />
-            <Controller
-              control={control}
-              name="purchasePrice"
+              name="trim"
               render={({ field }) => (
-                <Field
-                  label="Purchase price"
-                  placeholder="12500"
-                  keyboardType="decimal-pad"
-                  value={field.value}
-                  onChangeText={field.onChange}
-                  containerStyle={fieldLast}
-                />
+                <BayField label="Trim" placeholder="EX-L" value={field.value} onChangeText={field.onChange} />
               )}
             />
-          </Card>
+          </View>
         </View>
+        <Controller
+          control={control}
+          name="mileage"
+          rules={{ required: 'Current mileage is required' }}
+          render={({ field, fieldState }) => (
+            <>
+              <BayField
+                label="Mileage"
+                placeholder="82000"
+                keyboardType="number-pad"
+                value={field.value}
+                onChangeText={field.onChange}
+              />
+              {fieldState.error?.message ? <Text style={styles.err}>{fieldState.error.message}</Text> : null}
+            </>
+          )}
+        />
 
-        <Button title="Save vehicle" onPress={onSubmit} />
+        <Text style={styles.section}>IDENTIFIERS</Text>
+        <Controller
+          control={control}
+          name="licensePlate"
+          render={({ field }) => (
+            <BayField
+              label="License plate"
+              placeholder="7ABC123"
+              autoCapitalize="characters"
+              value={field.value}
+              onChangeText={field.onChange}
+            />
+          )}
+        />
+        <Controller
+          control={control}
+          name="vin"
+          rules={{
+            validate: (v) => {
+              if (!v.trim()) return true;
+              const check = validateVin(v);
+              return check.valid || check.reason;
+            },
+          }}
+          render={({ field, fieldState }) => (
+            <>
+              <BayField
+                label="VIN"
+                placeholder="17 characters"
+                autoCapitalize="characters"
+                value={field.value}
+                onChangeText={field.onChange}
+              />
+              {fieldState.error?.message ? <Text style={styles.err}>{fieldState.error.message}</Text> : null}
+            </>
+          )}
+        />
+        <Text style={styles.hint}>WE'LL DECODE MAKE/MODEL WHEN POSSIBLE</Text>
+
+        <Text style={styles.section}>OPTIONAL</Text>
+        <Controller
+          control={control}
+          name="purchaseDate"
+          rules={{
+            validate: (v) => !v || /^\d{4}-\d{2}-\d{2}$/.test(v) || 'Use YYYY-MM-DD',
+          }}
+          render={({ field, fieldState }) => (
+            <>
+              <BayField
+                label="Purchase date"
+                placeholder="YYYY-MM-DD"
+                value={field.value}
+                onChangeText={field.onChange}
+              />
+              {fieldState.error?.message ? <Text style={styles.err}>{fieldState.error.message}</Text> : null}
+            </>
+          )}
+        />
+        <Controller
+          control={control}
+          name="purchasePrice"
+          render={({ field }) => (
+            <BayField
+              label="Purchase price"
+              placeholder="12500"
+              keyboardType="decimal-pad"
+              value={field.value}
+              onChangeText={field.onChange}
+            />
+          )}
+        />
+
+        <BayButton title="Save vehicle" onPress={onSubmit} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  twoCol: { flexDirection: 'row', gap: spacing.md },
-  vinHint: {
-    color: palette.text.tertiary,
-    fontSize: typography.caption.size,
-    marginTop: spacing.sm,
+  pad: { flex: 1, justifyContent: 'center', padding: 20, gap: 16 },
+  scroll: { padding: 20, paddingBottom: 40 },
+  photo: { width: '100%', height: 160, marginBottom: 20 },
+  photoEmpty: { height: 160, backgroundColor: bay.fallback, justifyContent: 'flex-end', marginBottom: 20 },
+  photoHint: {
+    color: bay.orange,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1.6,
+    textAlign: 'center',
+    paddingVertical: 16,
+    textDecorationLine: 'underline',
   },
+  section: {
+    color: bay.due,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+    marginTop: 8,
+    marginBottom: 10,
+  },
+  twoCol: { flexDirection: 'row', gap: 16 },
+  hint: { color: bay.hint, fontSize: 10, fontWeight: '800', letterSpacing: 0.8, marginBottom: 16, marginTop: -4 },
+  err: { color: bay.orange, fontSize: 11, fontWeight: '700', marginTop: -10, marginBottom: 10 },
 });

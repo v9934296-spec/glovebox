@@ -1,9 +1,8 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Button, Card, Screen, SectionLabel } from '@/components/ui';
+import { Alert, Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Mute, Rule, ShopRow, ShopScreen, SolidButton, TextButton } from '@/components/shop';
 import { useAuth } from '@/lib/auth/session';
 import { resetAllData } from '@/lib/db/database';
 import { useVehicles } from '@/lib/db/hooks';
@@ -92,95 +91,72 @@ export default function SettingsScreen() {
   }
 
   return (
-    <Screen style={{ padding: 0 }}>
-      <ScrollView
-        contentContainerStyle={{
-          padding: spacing.screenPadding,
-          paddingBottom: spacing['2xl'],
-          gap: spacing.section,
-        }}
-      >
+    <ShopScreen style={{ padding: 0 }}>
+      <ScrollView contentContainerStyle={styles.page}>
         <View>
-          <SectionLabel title="Account & sync" />
+          <Mute>Account & sync</Mute>
           {status === 'signedIn' ? (
             <>
-              <Card>
-                <Row label="Signed in as" value={session?.user.email ?? '—'} />
-                <Row label="Pending changes" value={String(pending)} />
-                <Row label="Last synced" value={lastSyncedAt ? formatTimestamp(lastSyncedAt) : 'never'} last />
-              </Card>
+              <ShopRow label="Signed in as" value={session?.user.email ?? '—'} />
+              <Rule />
+              <ShopRow label="Pending changes" value={String(pending)} />
+              <Rule />
+              <ShopRow label="Last synced" value={lastSyncedAt ? formatTimestamp(lastSyncedAt) : 'never'} />
               {error != null && <Text style={styles.syncError}>Last sync error: {error}</Text>}
-              <View style={styles.accountButtons}>
-                <Button
-                  title={syncing ? 'Syncing…' : 'Sync now'}
-                  variant="secondary"
-                  loading={syncing}
+              <View style={styles.rowBtns}>
+                <TextButton
+                  label={syncing ? 'Syncing…' : 'Sync now'}
                   onPress={() => void syncNow()}
-                  style={{ flex: 1 }}
                 />
-                <Button title="Sign out" variant="ghost" onPress={confirmSignOut} style={{ flex: 1 }} />
+                <TextButton label="Sign out" tone="mute" onPress={confirmSignOut} />
               </View>
             </>
           ) : isSupabaseConfigured ? (
             <>
-              <Card>
-                <Text style={styles.localOnlyText}>
-                  You're in local-only mode. Everything stays on this device — sign in to back up your garage and
-                  sync across devices.
-                </Text>
-              </Card>
-              <Button
-                title="Sign in or create account"
-                onPress={() => router.push('/(auth)/sign-in')}
-                style={{ marginTop: spacing.md }}
-              />
+              <Text style={styles.body}>
+                You're in local-only mode. Everything stays on this device — sign in to back up your garage and
+                sync across devices.
+              </Text>
+              <SolidButton title="Sign in or create account" onPress={() => router.push('/(auth)/sign-in')} />
             </>
           ) : (
-            <Card>
-              <Text style={styles.localOnlyText}>
-                Cloud sync is not configured in this build. All data stays on this device.
-              </Text>
-            </Card>
+            <Text style={styles.body}>Cloud sync is not configured in this build. All data stays on this device.</Text>
           )}
         </View>
 
         <View>
-          <SectionLabel title="Glovebox Pro" />
-          <Card>
-            <Row label="Plan" value={isPro ? 'Pro' : 'Free'} />
-            <Row
-              label="Vehicles"
-              value={isPro ? `${vehicles.length} (unlimited)` : `${vehicles.length} of ${FREE_LIMITS.maxVehicles}`}
-              last
-            />
-          </Card>
+          <Mute>Glovebox Pro</Mute>
+          <ShopRow label="Plan" value={isPro ? 'Pro' : 'Free'} />
+          <Rule />
+          <ShopRow
+            label="Vehicles"
+            value={isPro ? `${vehicles.length} (unlimited)` : `${vehicles.length} of ${FREE_LIMITS.maxVehicles}`}
+          />
           {isPro ? (
             <>
-              <Button
-                title="Manage subscription"
-                variant="secondary"
-                onPress={() => {
-                  void (async () => {
-                    const opened = await presentCustomerCenter();
-                    if (!opened) {
-                      Alert.alert(
-                        'Manage subscription',
-                        'Open your App Store account settings to manage or cancel Glovebox Pro.',
-                      );
-                    }
-                  })();
-                }}
-                style={{ marginTop: spacing.md }}
-              />
+              <View style={{ marginTop: spacing.md }}>
+                <TextButton
+                  label="Manage subscription"
+                  onPress={() => {
+                    void (async () => {
+                      const opened = await presentCustomerCenter();
+                      if (!opened) {
+                        Alert.alert(
+                          'Manage subscription',
+                          'Open your App Store account settings to manage or cancel Glovebox Pro.',
+                        );
+                      }
+                    })();
+                  }}
+                />
+              </View>
               <Text style={styles.hint}>Manage or cancel in your App Store account settings.</Text>
             </>
           ) : (
             <>
-              <Button
-                title="Upgrade to Pro"
-                onPress={() => router.push('/paywall')}
-                style={{ marginTop: spacing.md }}
-              />
+              <View style={{ marginTop: spacing.md }}>
+                <SolidButton title="Upgrade to Pro" onPress={() => router.push('/paywall')} />
+              </View>
               {purchasesStatus === 'unavailable' && (
                 <Text style={styles.hint}>Purchases are not available in this build.</Text>
               )}
@@ -189,48 +165,45 @@ export default function SettingsScreen() {
         </View>
 
         <View>
-          <SectionLabel title="Units" />
-          <Card>
-            <Row label="Distance" value="Miles" />
-            <Row label="Currency" value="USD" last />
-          </Card>
+          <Mute>Units</Mute>
+          <ShopRow label="Distance" value="Miles" />
+          <Rule />
+          <ShopRow label="Currency" value="USD" />
           <Text style={styles.hint}>Metric units and other currencies are coming later.</Text>
         </View>
 
         {(privacyUrl != null || termsUrl != null) && (
           <View>
-            <SectionLabel title="Legal" />
-            <Card>
-              {privacyUrl != null && (
-                <LinkRow
+            <Mute>Legal</Mute>
+            {privacyUrl != null && (
+              <View style={styles.linkRow}>
+                <TextButton
                   label="Privacy Policy"
                   onPress={() => {
                     if (privacyUrl) void Linking.openURL(privacyUrl);
                   }}
-                  last={termsUrl == null}
                 />
-              )}
-              {termsUrl != null && (
-                <LinkRow
+              </View>
+            )}
+            {termsUrl != null && (
+              <View style={styles.linkRow}>
+                <TextButton
                   label="Terms of Use"
                   onPress={() => {
                     if (termsUrl) void Linking.openURL(termsUrl);
                   }}
-                  last
                 />
-              )}
-            </Card>
+              </View>
+            )}
           </View>
         )}
 
         {status === 'signedIn' && (
           <View>
-            <SectionLabel title="Account" />
-            <Button
-              title={deleting ? 'Deleting…' : 'Delete account'}
-              variant="danger"
-              loading={deleting}
-              disabled={deleting}
+            <Mute>Account</Mute>
+            <TextButton
+              label={deleting ? 'Deleting…' : 'Delete account'}
+              tone="danger"
               onPress={confirmDeleteAccount}
             />
             <Text style={styles.hint}>
@@ -240,16 +213,11 @@ export default function SettingsScreen() {
         )}
 
         <View>
-          <SectionLabel title="Data" />
-          <Card>
-            <Row label="Vehicles on this device" value={String(vehicles.length)} last />
-          </Card>
-          <Button
-            title="Erase all data"
-            variant="danger"
-            onPress={confirmReset}
-            style={{ marginTop: spacing.md }}
-          />
+          <Mute>Data</Mute>
+          <ShopRow label="Vehicles on this device" value={String(vehicles.length)} />
+          <View style={{ marginTop: spacing.md }}>
+            <TextButton label="Erase all data" tone="danger" onPress={confirmReset} />
+          </View>
           <Text style={styles.hint}>
             Removes vehicles, service records, and reminders on this device. Cloud copies are not touched.
           </Text>
@@ -257,7 +225,7 @@ export default function SettingsScreen() {
 
         <Text style={styles.version}>Glovebox {Constants.expoConfig?.version ?? ''}</Text>
       </ScrollView>
-    </Screen>
+    </ShopScreen>
   );
 }
 
@@ -266,61 +234,26 @@ function formatTimestamp(iso: string): string {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
 }
 
-function Row({ label, value, last }: { label: string; value: string; last?: boolean }) {
-  return (
-    <View style={[styles.row, !last && styles.rowBorder]}>
-      <Text style={styles.rowLabel} numberOfLines={1}>
-        {label}
-      </Text>
-      <Text style={styles.rowValue} numberOfLines={1}>
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-function LinkRow({ label, onPress, last }: { label: string; onPress: () => void; last?: boolean }) {
-  return (
-    <Pressable onPress={onPress} style={[styles.row, !last && styles.rowBorder]}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <View style={styles.linkTrail}>
-        <Text style={styles.legalLink}>Open</Text>
-        <Ionicons name="chevron-forward" size={14} color={palette.accent.primary} />
-      </View>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.sm,
+  page: {
+    padding: spacing.screenPadding,
+    paddingBottom: spacing['2xl'],
+    gap: spacing.section,
   },
-  rowBorder: { borderBottomWidth: 1, borderBottomColor: palette.border.subtle },
-  rowLabel: { color: palette.text.primary, fontSize: typography.body.size, flexShrink: 0 },
-  rowValue: {
-    color: palette.text.tertiary,
-    fontSize: typography.body.size,
-    flexShrink: 1,
-    textAlign: 'right',
-  },
-  hint: { color: palette.text.tertiary, fontSize: typography.caption.size, marginTop: spacing.sm },
-  localOnlyText: {
+  body: {
     color: palette.text.secondary,
     fontSize: typography.body.size,
     lineHeight: typography.body.lineHeight,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
   },
-  accountButtons: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.md },
+  hint: { color: palette.text.tertiary, fontSize: typography.caption.size, marginTop: spacing.sm },
+  rowBtns: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.md },
   syncError: { color: palette.status.overdue, fontSize: typography.caption.size, marginTop: spacing.sm },
   version: {
     color: palette.text.tertiary,
     fontSize: typography.caption.size,
     textAlign: 'center',
-    marginTop: spacing.sm,
   },
-  legalLink: { color: palette.accent.primary, fontSize: typography.body.size, fontWeight: '600' },
-  linkTrail: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  linkRow: { paddingVertical: spacing.sm },
 });

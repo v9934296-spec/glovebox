@@ -11,12 +11,14 @@ import {
   Text,
   View,
 } from 'react-native';
+import { BayPaint, BayRoom, BayScore, HangTag, Slats } from '@/components/bay';
+import { bay } from '@/lib/bay';
 import { useAllServiceRecords, useReminders, useVehicles } from '@/lib/db/hooks';
 import { dueSummary, reminderDueState, todayIso, type DueState } from '@/lib/domain/due';
 import { healthScore } from '@/lib/domain/healthScore';
 import type { Reminder, Vehicle } from '@/lib/domain/types';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 const DUE_RANK: Record<DueState, number> = { overdue: 0, due_soon: 1, upcoming: 2, no_due: 3 };
 
 function nextDueFor(vehicle: Vehicle, reminders: Reminder[], today: string) {
@@ -74,26 +76,28 @@ export default function GarageScreen() {
 
   if (vehicles.length === 0) {
     return (
-      <View style={styles.room}>
-        <View style={styles.slats}>
-          {Array.from({ length: 8 }).map((_, i) => (
-            <View key={i} style={styles.slat} />
-          ))}
-        </View>
+      <BayRoom>
+        <Slats count={8} />
         <View style={styles.emptyFloor}>
-          <Text style={styles.bayPaint}>BAY 00</Text>
+          <BayPaint>BAY 00</BayPaint>
           <Text style={styles.emptyHint}>BAY EMPTY</Text>
-          <Pressable onPress={() => router.push('/vehicle/add')} hitSlop={8}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Pull a car in"
+            onPress={() => router.push('/vehicle/add')}
+            hitSlop={8}
+          >
             <Text style={styles.pull}>PULL A CAR IN</Text>
           </Pressable>
         </View>
-      </View>
+      </BayRoom>
     );
   }
 
   return (
-    <View style={styles.room}>
+    <BayRoom>
       <FlatList
+        style={{ flex: 1 }}
         data={sorted}
         horizontal
         pagingEnabled
@@ -103,34 +107,36 @@ export default function GarageScreen() {
         scrollEventThrottle={16}
         renderItem={({ item, index }) => {
           const { vehicle, health, nextDue } = item;
+          const label = [
+            vehicle.nickname,
+            `${vehicle.mileage.toLocaleString()} miles`,
+            nextDue ? `${nextDue.title}, ${nextDue.summary}` : `health ${health.score}`,
+          ].join(', ');
           return (
             <Pressable
-              style={{ width, height: height - 160 }}
+              accessibilityRole="button"
+              accessibilityLabel={label}
+              style={{ width, flex: 1 }}
               onPress={() => router.push({ pathname: '/vehicle/[id]', params: { id: vehicle.id } })}
             >
               {vehicle.photoUri ? (
                 <Image source={{ uri: vehicle.photoUri }} style={styles.photo} />
               ) : (
                 <View style={styles.photoFallback}>
-                  <View style={styles.slats}>
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <View key={i} style={styles.slat} />
-                    ))}
-                  </View>
+                  <Slats count={6} />
                   <Text style={styles.fallbackYmm}>
                     {vehicle.year} {vehicle.make.toUpperCase()} {vehicle.model.toUpperCase()}
                   </Text>
                 </View>
               )}
 
-              <View style={styles.tag}>
-                <Text style={styles.tagName}>{vehicle.nickname.toUpperCase()}</Text>
-                <Text style={styles.tagMi}>{vehicle.mileage.toLocaleString()} MI</Text>
+              <View style={styles.tagWrap}>
+                <HangTag name={vehicle.nickname} miles={`${vehicle.mileage.toLocaleString()} MI`} />
               </View>
 
               <View style={styles.floor}>
-                <Text style={styles.bayPaint}>BAY {bayNo(index)}</Text>
-                <Text style={styles.score}>{health.score}</Text>
+                <BayPaint>{`BAY ${bayNo(index)}`}</BayPaint>
+                <BayScore score={health.score} />
               </View>
 
               {nextDue != null && (
@@ -144,21 +150,17 @@ export default function GarageScreen() {
       />
 
       {sorted.length > 1 && (
-        <View style={styles.dots}>
+        <View style={styles.dots} accessibilityRole="adjustable" accessibilityLabel={`Bay ${page + 1} of ${sorted.length}`}>
           {sorted.map((item, i) => (
             <View key={item.vehicle.id} style={[styles.dot, i === page && styles.dotOn]} />
           ))}
         </View>
       )}
-    </View>
+    </BayRoom>
   );
 }
 
 const styles = StyleSheet.create({
-  room: {
-    flex: 1,
-    backgroundColor: '#1A1916',
-  },
   photo: {
     ...StyleSheet.absoluteFillObject,
     width: '100%',
@@ -166,47 +168,21 @@ const styles = StyleSheet.create({
   },
   photoFallback: {
     height: '72%',
-    backgroundColor: '#2A2926',
+    backgroundColor: bay.fallback,
     justifyContent: 'flex-end',
   },
-  slats: {
-    paddingTop: 8,
-    paddingHorizontal: 10,
-    gap: 4,
-  },
-  slat: {
-    height: 10,
-    backgroundColor: '#6B665C',
-  },
   fallbackYmm: {
-    color: '#C9C2B4',
+    color: bay.ymm,
     fontSize: 13,
     fontWeight: '800',
     letterSpacing: 1.4,
     textAlign: 'center',
     paddingVertical: 16,
   },
-  tag: {
+  tagWrap: {
     position: 'absolute',
     right: 16,
     top: '58%',
-    backgroundColor: '#EFE6D2',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: '#1C1A16',
-  },
-  tagName: {
-    color: '#1C1A16',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1.1,
-  },
-  tagMi: {
-    color: '#4A463E',
-    fontSize: 11,
-    fontWeight: '700',
-    marginTop: 2,
   },
   floor: {
     position: 'absolute',
@@ -217,24 +193,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-end',
   },
-  bayPaint: {
-    color: '#D7D0C4',
-    fontSize: 32,
-    fontWeight: '800',
-    letterSpacing: 3,
-  },
-  score: {
-    color: '#D85A1A',
-    fontSize: 40,
-    fontWeight: '800',
-    fontStyle: 'italic',
-  },
   due: {
     position: 'absolute',
     left: 18,
     right: 18,
     bottom: 8,
-    color: '#8A847A',
+    color: bay.due,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.8,
@@ -246,13 +210,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   emptyHint: {
-    color: '#8A847A',
+    color: bay.hint,
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 2,
   },
   pull: {
-    color: '#D85A1A',
+    color: bay.orange,
     fontSize: 13,
     fontWeight: '800',
     letterSpacing: 1.6,
@@ -267,9 +231,9 @@ const styles = StyleSheet.create({
   dot: {
     width: 6,
     height: 6,
-    backgroundColor: '#4A4741',
+    backgroundColor: bay.dot,
   },
   dotOn: {
-    backgroundColor: '#EFE6D2',
+    backgroundColor: bay.cream,
   },
 });

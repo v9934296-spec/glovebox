@@ -1,5 +1,14 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type StyleProp,
+  type TextInputProps,
+  type ViewStyle,
+} from 'react-native';
 import type { DueState } from '@/lib/domain/due';
 import { palette, spacing, typography } from '@/lib/theme';
 
@@ -72,6 +81,49 @@ export function SolidButton({
   );
 }
 
+export function ShopField({ label, ...input }: { label: string } & TextInputProps) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput
+        placeholderTextColor={palette.text.tertiary}
+        {...input}
+        style={[styles.fieldInput, input.style]}
+      />
+    </View>
+  );
+}
+
+export function ShopPick({
+  label,
+  selected,
+  onPress,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={styles.pick}
+    >
+      <Text style={[styles.pickText, selected && styles.pickOn]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+export function ShopRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.row}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      <Text style={styles.rowValue}>{value}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.bg.app },
   rule: { height: StyleSheet.hairlineWidth, backgroundColor: palette.border.subtle },
@@ -93,4 +145,28 @@ const styles = StyleSheet.create({
     fontSize: typography.bodyEmphasis.size,
     fontWeight: '600',
   },
+  field: { gap: 4, marginBottom: spacing.md },
+  fieldLabel: {
+    color: palette.text.tertiary,
+    fontSize: typography.overline.size,
+    fontWeight: '500',
+  },
+  fieldInput: {
+    color: palette.text.primary,
+    fontSize: typography.body.size,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: palette.border.subtle,
+    paddingVertical: 8,
+  },
+  pick: { paddingVertical: 6, paddingRight: 12 },
+  pickText: { color: palette.text.tertiary, fontSize: typography.caption.size, fontWeight: '600' },
+  pickOn: { color: palette.text.primary },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  rowLabel: { color: palette.text.primary, fontSize: typography.body.size },
+  rowValue: { color: palette.text.tertiary, fontSize: typography.body.size, flexShrink: 1, textAlign: 'right' },
 });

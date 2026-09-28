@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import React, { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { DueWord, Mute, Rule, ShopScreen, SolidButton, TextButton } from '@/components/shop';
+import { DueWord, Mute, Rule, ShopScreen, TextButton } from '@/components/shop';
 import { useReminders, useVehicles } from '@/lib/db/hooks';
 import { completeReminder } from '@/lib/db/reminderRepo';
 import { dueSummary, reminderDueState, todayIso, type DueState } from '@/lib/domain/due';
@@ -50,8 +50,6 @@ export default function RemindersScreen() {
   return (
     <ShopScreen style={{ padding: 0 }}>
       <ScrollView contentContainerStyle={styles.page}>
-        <SolidButton title="New reminder" onPress={() => router.push('/reminder/add')} />
-
         {empty ? (
           <Mute>Oil, registration, insurance — anything on a calendar or an odometer.</Mute>
         ) : (
