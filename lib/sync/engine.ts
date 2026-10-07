@@ -5,7 +5,7 @@ import { currentUserId } from '../auth/session';
 import { bumpDataVersion, getDb, nowIso } from '../db/database';
 import { isSupabaseConfigured, getSupabase } from '../supabase';
 import { ensureLocalMedia, uploadRowMedia } from './media';
-import { coalesceQueue, laterTimestamp, remoteSubResourceIsNewer, shouldApplyRemote } from './merge';
+import { coalesceQueue, laterTimestamp, shouldApplyRemote } from './merge';
 import {
   clearQueueEntries,
   enqueueChange,
@@ -28,13 +28,6 @@ type TableConfig = {
   columns: string[];
   mediaLocalColumn?: string;
   mediaCloudColumn?: string;
-  /**
-   * Timestamp/data column pairs for independently-fetched snapshots (VIN decode,
-   * recall check) that must not regress: on push, whichever side's timestamp is
-   * newer wins for that pair, instead of the whole-row upsert blindly overwriting
-   * a fresher remote snapshot with a stale local one.
-   */
-  snapshotPairs?: { timestampColumn: string; dataColumn: string }[];
 };
 
 const TABLE_CONFIG: Record<SyncTable, TableConfig> = {
@@ -46,10 +39,11 @@ const TABLE_CONFIG: Record<SyncTable, TableConfig> = {
     ],
     mediaLocalColumn: 'photo_uri',
     mediaCloudColumn: 'photo_path',
-    snapshotPairs: [
-      { timestampColumn: 'vin_decoded_at', dataColumn: 'vin_decode_json' },
-      { timestampColumn: 'recall_checked_at', dataColumn: 'recall_json' },
-    ],
+    // vin_decoded_at/vin_decode_json and recall_checked_at/recall_json are protected
+    // from regressing on push by a Postgres trigger (supabase/migrations/
+    // 0003_vin_recall_snapshot_guard.sql), not by client-side comparison: a
+    // read-then-write on the client can't be made atomic against a concurrent
+    // push from another device, but a same-statement trigger can.
   },
   service_records: {
     columns: [
@@ -108,28 +102,6 @@ function backfillIfNeeded(userId: string) {
   setSyncState(key, '1');
 }
 
-/**
- * Fetches the current remote value of each snapshot pair for the given ids, keyed by id.
- * A push then keeps whichever side (local vs. remote) has the newer snapshot timestamp,
- * instead of always overwriting remote with the pushing device's possibly-stale copy.
- */
-async function fetchRemoteSnapshots(
-  table: SyncTable,
-  config: TableConfig,
-  ids: string[],
-): Promise<Map<string, LocalRow>> {
-  const snapshots = new Map<string, LocalRow>();
-  if (!config.snapshotPairs || config.snapshotPairs.length === 0 || ids.length === 0) return snapshots;
-  const supabase = getSupabase();
-  const selectColumns = ['id', ...config.snapshotPairs.flatMap((p) => [p.timestampColumn, p.dataColumn])];
-  const { data, error } = await supabase.from(table).select(selectColumns.join(',')).in('id', ids);
-  if (error) throw new Error(`push ${table} snapshot fetch failed: ${error.message}`);
-  for (const row of (data ?? []) as unknown as LocalRow[]) {
-    snapshots.set(row.id as string, row);
-  }
-  return snapshots;
-}
-
 async function pushQueue(userId: string) {
   const changes = coalesceQueue(readQueue());
   if (changes.length === 0) return;
@@ -146,7 +118,6 @@ async function pushQueue(userId: string) {
     const config = TABLE_CONFIG[table];
 
     try {
-      const remoteSnapshots = await fetchRemoteSnapshots(table, config, tableChanges.map((c) => c.rowId));
       const payloads: Record<string, unknown>[] = [];
 
       for (const change of tableChanges) {
@@ -158,17 +129,6 @@ async function pushQueue(userId: string) {
           const localUri = (row[config.mediaLocalColumn] as string | null) ?? null;
           payload[config.mediaCloudColumn] =
             row.deleted_at === null ? await uploadRowMedia(userId, table, change.rowId, localUri) : null;
-        }
-        const remote = remoteSnapshots.get(change.rowId);
-        if (remote) {
-          for (const pair of config.snapshotPairs ?? []) {
-            const localTs = (row[pair.timestampColumn] as string | null) ?? null;
-            const remoteTs = (remote[pair.timestampColumn] as string | null) ?? null;
-            if (remoteSubResourceIsNewer(localTs, remoteTs)) {
-              payload[pair.timestampColumn] = remoteTs;
-              payload[pair.dataColumn] = remote[pair.dataColumn] ?? null;
-            }
-          }
         }
         payloads.push(payload);
       }

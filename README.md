@@ -69,6 +69,7 @@ pnpm install
 pnpm start          # Expo dev server (press i / a for simulator)
 pnpm typecheck      # tsc --noEmit
 pnpm test           # jest unit tests
+pnpm test:db        # SQL regression tests for Postgres triggers (needs $TEST_DATABASE_URL)
 ```
 
 Without a `.env` the app boots straight into local-only mode (no auth screens).
@@ -81,7 +82,10 @@ Without a `.env` the app boots straight into local-only mode (no auth screens).
    [0001_init.sql](supabase/migrations/0001_init.sql) creates the `vehicles`,
    `service_records`, and `reminders` tables with row-level security plus the
    private `glovebox-media` storage bucket; [0002_vin_recalls.sql](supabase/migrations/0002_vin_recalls.sql)
-   adds the VIN decode/recall check columns to `vehicles` (Phase 6).
+   adds the VIN decode/recall check columns to `vehicles` (Phase 6);
+   [0003_vin_recall_snapshot_guard.sql](supabase/migrations/0003_vin_recall_snapshot_guard.sql)
+   adds a trigger that keeps those columns from regressing when two devices
+   push concurrently (see "How sync works" below).
 3. Copy `.env.example` to `.env` and fill in **Project Settings → API**:
 
    ```bash
@@ -106,6 +110,11 @@ Without a `.env` the app boots straight into local-only mode (no auth screens).
   download on other devices via short-lived signed URLs.
 - Sync runs on sign-in, on app foreground, after writes, and via
   Settings → Sync now. Offline? Changes wait in the queue.
+- Pushes upsert a vehicle's whole row, so two devices pushing concurrently could
+  otherwise let a stale push clobber a fresher VIN decode or recall check. A
+  Postgres trigger (`0003_vin_recall_snapshot_guard.sql`) closes that race at the
+  database level — a client-side read-then-write can't be made atomic against a
+  concurrent push from another device, but a same-statement trigger can.
 
 ## Glovebox Pro (monetization)
 

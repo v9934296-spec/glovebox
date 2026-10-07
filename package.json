@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "test:db": "psql \"$TEST_DATABASE_URL\" -v ON_ERROR_STOP=1 -f supabase/tests/protect_vehicle_snapshot_columns.test.sql"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",
